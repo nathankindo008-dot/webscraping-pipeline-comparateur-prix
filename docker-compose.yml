@@ -1,0 +1,181 @@
+version: "3.9"
+
+# =============================================================
+# Comparateur de Prix Jumia CI — Docker Compose
+# ENSEA — AS Data Science | Dr N'golo Konate
+#
+# Services :
+#   postgres   → Base de données PostgreSQL
+#   redis      → Broker Celery + cache
+#   api        → API Flask
+#   worker     → Celery worker (exécute les scrapes)
+#   beat       → Celery Beat (planificateur)
+#   prometheus → Collecte des métriques
+#   grafana    → Dashboard de monitoring
+# =============================================================
+
+services:
+
+  # ───────────────────────────────────────────
+  # 1. PostgreSQL
+  # ───────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: jumia_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-jumia_db}
+      POSTGRES_USER:     ${POSTGRES_USER:-jumia_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jumia_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./api/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jumia_user} -d ${POSTGRES_DB:-jumia_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ───────────────────────────────────────────
+  # 2. Redis
+  # ───────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: jumia_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ───────────────────────────────────────────
+  # 3. API Flask
+  # ───────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jumia_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL:  postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
+      REDIS_URL:     redis://redis:6379/0
+      FLASK_DEBUG:   ${FLASK_DEBUG:-false}
+      FLASK_ENV:     ${FLASK_ENV:-production}
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./api:/app/api
+      - scraper_data:/app/scraper
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ───────────────────────────────────────────
+  # 4. Celery Worker
+  # ───────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jumia_worker
+    restart: unless-stopped
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
+      REDIS_URL:    redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./scraper:/app/scraper
+      - scraper_data:/app/scraper_output
+
+  # ───────────────────────────────────────────
+  # 5. Celery Beat (planificateur)
+  # ───────────────────────────────────────────
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jumia_beat
+    restart: unless-stopped
+    command: celery -A tasks.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
+      REDIS_URL:    redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - beat_data:/app/beat
+
+  # ───────────────────────────────────────────
+  # 6. Prometheus
+  # ───────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: jumia_prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  # ───────────────────────────────────────────
+  # 7. Grafana
+  # ───────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: jumia_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER:     ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+# ───────────────────────────────────────────
+# Volumes persistants
+# ───────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+  scraper_data:
+  beat_data:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,35 @@
+# =============================================================
+# prometheus.yml — Configuration Prometheus
+# Collecte des métriques Flask via prometheus-flask-exporter
+# =============================================================
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    project: "jumia-comparateur-prix"
+    env:     "production"
+
+scrape_configs:
+
+  # Métriques Prometheus lui-même
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Métriques API Flask (/metrics exposé par prometheus-flask-exporter)
+  - job_name: "jumia_api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:5000"]
+    scrape_interval: 30s
+
+  # Métriques Redis (via redis_exporter si ajouté plus tard)
+  # - job_name: "redis"
+  #   static_configs:
+  #     - targets: ["redis_exporter:9121"]
+
+  # Métriques PostgreSQL (via postgres_exporter si ajouté plus tard)
+  # - job_name: "postgres"
+  #   static_configs:
+  #     - targets: ["postgres_exporter:9187"]
