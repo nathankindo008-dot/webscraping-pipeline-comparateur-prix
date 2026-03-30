@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparateur de Prix — Jumia CI</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f111a;--card:#1a1d2e;--card2:#232640;--accent:#6c5ce7;--accent2:#a29bfe;--green:#00b894;--red:#e17055;--orange:#fdcb6e;--text:#e2e8f0;--muted:#8892b0;--border:#2d3154;--radius:12px}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}
+
+/* NAV */
+nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;height:64px;position:sticky;top:0;z-index:100;backdrop-filter:blur(10px)}
+nav .logo{font-size:1.3rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:.5rem}
+nav .logo span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+nav ul{list-style:none;display:flex;gap:.25rem;margin-left:auto}
+nav ul li a{padding:.5rem 1rem;border-radius:8px;color:var(--muted);font-size:.9rem;transition:.2s}
+nav ul li a:hover,nav ul li a.active{color:#fff;background:var(--card2)}
+
+/* LAYOUT */
+.container{max-width:1400px;margin:0 auto;padding:1.5rem 2rem}
+h1{font-size:1.8rem;font-weight:700;margin-bottom:.25rem}
+.subtitle{color:var(--muted);margin-bottom:1.5rem;font-size:.95rem}
+
+/* CARDS */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2rem}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.5rem;transition:.2s}
+.stat-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.stat-card .label{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.stat-card .value{font-size:2rem;font-weight:700;margin:.25rem 0}
+.stat-card .value.green{color:var(--green)}.stat-card .value.accent{color:var(--accent2)}.stat-card .value.orange{color:var(--orange)}
+
+/* SECTIONS */
+.section{display:none}.section.active{display:block}
+
+/* TABLE */
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{background:var(--card2);text-align:left;padding:.75rem 1rem;font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0}
+td{padding:.75rem 1rem;border-top:1px solid var(--border);font-size:.9rem}
+tr:hover td{background:rgba(108,92,231,.05)}
+.product-name{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.price{font-weight:700;color:var(--green);white-space:nowrap}
+.old-price{color:var(--muted);text-decoration:line-through;font-size:.85rem}
+.discount{background:var(--red);color:#fff;padding:2px 8px;border-radius:20px;font-size:.75rem;font-weight:600}
+.badge{padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:500;background:var(--card2);border:1px solid var(--border)}
+.product-img{width:48px;height:48px;object-fit:contain;border-radius:8px;background:#fff}
+
+/* FILTERS */
+.filters{display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center}
+.filters input,.filters select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:.6rem 1rem;border-radius:8px;font-size:.9rem;outline:none;transition:.2s}
+.filters input:focus,.filters select:focus{border-color:var(--accent)}
+.filters input{flex:1;min-width:200px}
+
+/* BUTTONS */
+.btn{padding:.6rem 1.25rem;border-radius:8px;border:none;font-size:.9rem;font-weight:600;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:.4rem}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent2)}
+.btn-sm{padding:.4rem .8rem;font-size:.8rem}
+.btn-green{background:var(--green);color:#fff}.btn-red{background:var(--red);color:#fff}
+
+/* PAGINATION */
+.pagination{display:flex;justify-content:center;align-items:center;gap:.5rem;margin-top:1.5rem}
+.pagination button{background:var(--card);border:1px solid var(--border);color:var(--text);padding:.4rem .8rem;border-radius:8px;cursor:pointer;transition:.2s}
+.pagination button:hover{border-color:var(--accent)}.pagination button:disabled{opacity:.3;cursor:default}
+.pagination .info{color:var(--muted);font-size:.85rem}
+
+/* HISTORY CHART */
+.chart-container{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-top:1rem}
+.chart-container canvas{max-height:350px}
+
+/* COMPARE */
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-top:1rem}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;text-align:center;position:relative;transition:.2s}
+.compare-card:hover{border-color:var(--accent)}
+.compare-card.best{border-color:var(--green);box-shadow:0 0 20px rgba(0,184,148,.15)}
+.compare-card.best::after{content:'Meilleure offre';position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:2px 12px;border-radius:20px;font-size:.75rem;font-weight:600}
+.compare-card img{width:100px;height:100px;object-fit:contain;border-radius:8px;background:#fff;margin:.75rem 0}
+.compare-card .c-name{font-weight:600;font-size:.9rem;margin-bottom:.5rem;min-height:2.5rem}
+.compare-card .c-price{font-size:1.5rem;font-weight:700;color:var(--green)}
+.compare-card .c-savings{color:var(--orange);font-size:.85rem;margin-top:.25rem}
+
+/* CATEGORY CARDS */
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem}
+.cat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;cursor:pointer;transition:.2s}
+.cat-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.cat-card h3{font-size:1rem;margin-bottom:.5rem;text-transform:capitalize}
+.cat-card .cat-stats{display:flex;justify-content:space-between;color:var(--muted);font-size:.85rem}
+
+/* TOAST */
+.toast{position:fixed;bottom:2rem;right:2rem;background:var(--green);color:#fff;padding:.75rem 1.5rem;border-radius:8px;font-weight:500;opacity:0;transition:.3s;z-index:999}
+.toast.show{opacity:1}
+.toast.error{background:var(--red)}
+
+/* LOADING */
+.loader{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  nav{padding:0 1rem}nav ul{gap:0}nav ul li a{padding:.5rem .6rem;font-size:.8rem}
+  .container{padding:1rem}h1{font-size:1.4rem}
+  .filters{flex-direction:column}.filters input{min-width:100%}
+  td,th{padding:.5rem .6rem;font-size:.8rem}.product-name{max-width:150px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">&#x1F6D2; <span>JumiaPrix CI</span></div>
+  <ul>
+    <li><a href="#" class="active" data-section="dashboard">Dashboard</a></li>
+    <li><a href="#" data-section="products">Produits</a></li>
+    <li><a href="#" data-section="compare">Comparer</a></li>
+    <li><a href="#" data-section="categories">Catégories</a></li>
+    <li><a href="#" data-section="history">Historique</a></li>
+  </ul>
+</nav>
+
+<!-- ========== DASHBOARD ========== -->
+<div class="container">
+<section id="dashboard" class="section active">
+  <h1>Dashboard</h1>
+  <p class="subtitle">Vue d'ensemble du comparateur de prix Jumia Côte d'Ivoire</p>
+  <div class="stats-grid" id="statsGrid"></div>
+  <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem">
+    <button class="btn btn-primary" onclick="launchScrape()">&#x1F504; Lancer un scraping</button>
+    <a href="/export?format=csv" class="btn btn-outline">&#x1F4E5; Export CSV</a>
+    <a href="/export?format=excel" class="btn btn-outline">&#x1F4CA; Export Excel</a>
+    <a href="/docs/" class="btn btn-outline" target="_blank">&#x1F4D6; API Swagger</a>
+  </div>
+  <h2 style="font-size:1.1rem;margin-bottom:1rem">Top catégories</h2>
+  <div class="cat-grid" id="dashCats"></div>
+</section>
+
+<!-- ========== PRODUITS ========== -->
+<section id="products" class="section">
+  <h1>Produits</h1>
+  <p class="subtitle">Parcourir les <span id="totalProducts">0</span> produits en base</p>
+  <div class="filters">
+    <input type="text" id="searchInput" placeholder="&#x1F50D; Rechercher un produit...">
+    <select id="catFilter"><option value="">Toutes catégories</option></select>
+    <select id="sortFilter">
+      <option value="price_asc">Prix croissant</option>
+      <option value="price_desc">Prix décroissant</option>
+      <option value="discount_desc">Meilleures promos</option>
+      <option value="reviews_desc">Plus d'avis</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadProducts()">Filtrer</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th></th><th>Produit</th><th>Catégorie</th><th>Prix</th><th>Ancien prix</th><th>Remise</th><th>Avis</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="productsBody"></tbody>
+    </table>
+  </div>
+  <div class="pagination" id="productsPag"></div>
+</section>
+
+<!-- ========== COMPARER ========== -->
+<section id="compare" class="section">
+  <h1>Comparer des produits</h1>
+  <p class="subtitle">Sélectionnez 2 à 5 produits pour les comparer côte à côte</p>
+  <div class="filters">
+    <input type="text" id="compareIds" placeholder="IDs séparés par virgule, ex: 100,150,200" style="flex:2">
+    <button class="btn btn-primary" onclick="compareProducts()">&#x2696;&#xFE0F; Comparer</button>
+  </div>
+  <div id="compareResult"></div>
+</section>
+
+<!-- ========== CATEGORIES ========== -->
+<section id="categories" class="section">
+  <h1>Catégories</h1>
+  <p class="subtitle">Explorer les catégories de produits Jumia CI</p>
+  <div class="cat-grid" id="catGrid"></div>
+</section>
+
+<!-- ========== HISTORIQUE ========== -->
+<section id="history" class="section">
+  <h1>Historique des prix</h1>
+  <p class="subtitle">Suivez l'évolution du prix d'un produit dans le temps</p>
+  <div class="filters">
+    <input type="number" id="historyId" placeholder="ID du produit (ex: 100)">
+    <button class="btn btn-primary" onclick="loadHistory()">&#x1F4C8; Voir l'historique</button>
+  </div>
+  <div id="historyResult"></div>
+</section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let currentPage = 1;
+const perPage = 20;
+
+// ── NAV ──
+document.querySelectorAll('nav a[data-section]').forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelectorAll('nav a').forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById(link.dataset.section).classList.add('active');
+  });
+});
+
+// ── TOAST ──
+function toast(msg, error = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (error ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ── FORMAT ──
+function fmtPrice(p) {
+  if (!p && p !== 0) return '—';
+  return new Intl.NumberFormat('fr-FR').format(Math.round(p)) + ' XOF';
+}
+function fmtCat(c) { return c ? c.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : ''; }
+
+// ── DASHBOARD ──
+async function loadDashboard() {
+  try {
+    const [health, cats] = await Promise.all([
+      fetch(API + '/health').then(r => r.json()),
+      fetch(API + '/categories').then(r => r.json())
+    ]);
+    const s = health.stats;
+    document.getElementById('statsGrid').innerHTML = `
+      <div class="stat-card"><div class="label">Produits</div><div class="value accent">${s.products}</div></div>
+      <div class="stat-card"><div class="label">Snapshots de prix</div><div class="value green">${s.price_snapshots}</div></div>
+      <div class="stat-card"><div class="label">Catégories</div><div class="value orange">${cats.total}</div></div>
+      <div class="stat-card"><div class="label">Snapshots / produit</div><div class="value">${(s.price_snapshots / s.products).toFixed(1)}</div></div>
+    `;
+    const catHTML = cats.categories.slice(0, 6).map(c => `
+      <div class="cat-card" onclick="goToCategory('${c.category}')">
+        <h3>${fmtCat(c.category)}</h3>
+        <div class="cat-stats">
+          <span>${c.nb_products} produits</span>
+          <span>Moy: ${fmtPrice(c.avg_price)}</span>
+        </div>
+        <div class="cat-stats" style="margin-top:.4rem">
+          <span style="color:var(--green)">Min: ${fmtPrice(c.min_price)}</span>
+          <span style="color:var(--red)">Max: ${fmtPrice(c.max_price)}</span>
+        </div>
+      </div>
+    `).join('');
+    document.getElementById('dashCats').innerHTML = catHTML;
+  } catch (e) { toast('Erreur chargement dashboard', true); }
+}
+
+// ── PRODUCTS ──
+async function loadProducts(page = 1) {
+  currentPage = page;
+  const q = document.getElementById('searchInput').value.trim();
+  const cat = document.getElementById('catFilter').value;
+  const sort = document.getElementById('sortFilter').value;
+
+  let url;
+  if (q) {
+    url = `${API}/search?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`;
+    if (cat) url += `&category=${cat}`;
+  } else {
+    url = `${API}/products?page=${page}&per_page=${perPage}&sort=${sort}`;
+    if (cat) url += `&category=${cat}`;
+  }
+
+  try {
+    const data = await fetch(url).then(r => r.json());
+    const prods = data.products || [];
+    const pag = data.pagination || {};
+    document.getElementById('totalProducts').textContent = pag.total || 0;
+
+    document.getElementById('productsBody').innerHTML = prods.map(p => `<tr>
+      <td><img class="product-img" src="${p.image_url || ''}" alt="" onerror="this.style.display='none'"></td>
+      <td><div class="product-name" title="${p.name}">${p.name}</div>
+          <a href="${p.product_url}" target="_blank" style="font-size:.75rem;color:var(--muted)">jumia.ci</a></td>
+      <td><span class="badge">${fmtCat(p.category)}</span></td>
+      <td class="price">${fmtPrice(p.price)}</td>
+      <td>${p.old_price ? '<span class="old-price">' + fmtPrice(p.old_price) + '</span>' : '—'}</td>
+      <td>${p.discount_pct ? '<span class="discount">-' + p.discount_pct + '%</span>' : '—'}</td>
+      <td>${p.reviews_count || 0}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="showHistory(${p.id})">Historique</button></td>
+    </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">Aucun produit trouvé</td></tr>';
+
+    const pages = pag.pages || 1;
+    document.getElementById('productsPag').innerHTML = `
+      <button ${page<=1?'disabled':''} onclick="loadProducts(${page-1})">&#x25C0; Préc</button>
+      <span class="info">Page ${page} / ${pages} (${pag.total} résultats)</span>
+      <button ${page>=pages?'disabled':''} onclick="loadProducts(${page+1})">Suiv &#x25B6;</button>
+    `;
+  } catch (e) { toast('Erreur chargement produits', true); }
+}
+
+async function loadCategoryFilter() {
+  try {
+    const data = await fetch(API + '/categories').then(r => r.json());
+    const sel = document.getElementById('catFilter');
+    data.categories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.category; opt.textContent = fmtCat(c.category) + ` (${c.nb_products})`;
+      sel.appendChild(opt);
+    });
+  } catch (e) {}
+}
+
+// ── COMPARE ──
+async function compareProducts() {
+  const ids = document.getElementById('compareIds').value.trim();
+  if (!ids) { toast('Entrez des IDs de produits', true); return; }
+  try {
+    const r = await fetch(`${API}/products/compare?ids=${ids}`);
+    if (!r.ok) { const e = await r.json(); toast(e.message, true); return; }
+    const data = await r.json();
+    const bestId = data.best_deal.product_id;
+    document.getElementById('compareResult').innerHTML = `
+      <div class="compare-grid">${data.comparison.map(p => `
+        <div class="compare-card ${p.id === bestId ? 'best' : ''}">
+          <img src="${p.image_url || ''}" alt="" onerror="this.style.display='none'">
+          <div class="c-name">${p.name}</div>
+          <span class="badge">${fmtCat(p.category)}</span>
+          <div class="c-price" style="margin-top:.75rem">${fmtPrice(p.price)}</div>
+          ${p.old_price ? '<div class="old-price">' + fmtPrice(p.old_price) + '</div>' : ''}
+          ${p.discount_pct ? '<span class="discount">-' + p.discount_pct + '%</span>' : ''}
+          ${p.savings ? '<div class="c-savings">Économie: ' + fmtPrice(p.savings) + '</div>' : ''}
+          <div style="margin-top:.5rem;color:var(--muted);font-size:.8rem">${p.reviews_count} avis</div>
+          <a href="${p.product_url}" target="_blank" class="btn btn-sm btn-outline" style="margin-top:.75rem">Voir sur Jumia</a>
+        </div>
+      `).join('')}</div>
+    `;
+  } catch (e) { toast('Erreur comparaison', true); }
+}
+
+// ── CATEGORIES ──
+async function loadCategories() {
+  try {
+    const data = await fetch(API + '/categories').then(r => r.json());
+    document.getElementById('catGrid').innerHTML = data.categories.map(c => `
+      <div class="cat-card" onclick="goToCategory('${c.category}')">
+        <h3>${fmtCat(c.category)}</h3>
+        <div class="cat-stats"><span>${c.nb_products} produits</span><span>Moy: ${fmtPrice(c.avg_price)}</span></div>
+        <div class="cat-stats" style="margin-top:.4rem">
+          <span style="color:var(--green)">Min: ${fmtPrice(c.min_price)}</span>
+          <span style="color:var(--red)">Max: ${fmtPrice(c.max_price)}</span>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) { toast('Erreur catégories', true); }
+}
+
+function goToCategory(cat) {
+  document.getElementById('catFilter').value = cat;
+  document.querySelector('nav a[data-section="products"]').click();
+  loadProducts(1);
+}
+
+// ── HISTORY ──
+let histChart = null;
+async function loadHistory(id) {
+  if (!id) id = document.getElementById('historyId').value;
+  if (!id) { toast('Entrez un ID de produit', true); return; }
+  try {
+    const r = await fetch(`${API}/products/${id}/history?limit=60`);
+    if (!r.ok) { const e = await r.json(); toast(e.message, true); return; }
+    const data = await r.json();
+
+    const variation = data.price_variation_pct;
+    const varColor = variation > 0 ? 'var(--red)' : variation < 0 ? 'var(--green)' : 'var(--muted)';
+    const varSign = variation > 0 ? '+' : '';
+
+    document.getElementById('historyResult').innerHTML = `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem">
+        <h3 style="font-size:1rem;margin-bottom:.5rem">${data.name}</h3>
+        <span class="badge">${fmtCat(data.category)}</span>
+        <span style="margin-left:.5rem;color:var(--muted)">${data.nb_snapshots} snapshot(s)</span>
+        ${variation !== null ? `<span style="margin-left:1rem;color:${varColor};font-weight:600">${varSign}${variation}%</span>` : ''}
+        <a href="${data.product_url}" target="_blank" style="margin-left:1rem;font-size:.85rem">Voir sur Jumia &#x2197;</a>
+      </div>
+      <div class="chart-container"><canvas id="histCanvas"></canvas></div>
+    `;
+
+    const labels = data.history.map(h => new Date(h.scraped_at).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})).reverse();
+    const prices = data.history.map(h => h.price).reverse();
+    const oldPrices = data.history.map(h => h.old_price).reverse();
+
+    if (histChart) histChart.destroy();
+    histChart = new Chart(document.getElementById('histCanvas'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Prix actuel', data: prices, borderColor: '#6c5ce7', backgroundColor: 'rgba(108,92,231,.1)', fill: true, tension: .3, pointRadius: 4, borderWidth: 2 },
+          { label: 'Ancien prix', data: oldPrices, borderColor: '#636e72', backgroundColor: 'transparent', borderDash: [5,5], tension: .3, pointRadius: 3, borderWidth: 1 }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#8892b0' } } },
+        scales: {
+          x: { ticks: { color: '#8892b0', maxRotation: 45 }, grid: { color: 'rgba(45,49,84,.5)' } },
+          y: { ticks: { color: '#8892b0', callback: v => fmtPrice(v) }, grid: { color: 'rgba(45,49,84,.5)' } }
+        }
+      }
+    });
+  } catch (e) { toast('Erreur historique', true); }
+}
+
+function showHistory(id) {
+  document.getElementById('historyId').value = id;
+  document.querySelector('nav a[data-section="history"]').click();
+  loadHistory(id);
+}
+
+// ── SCRAPE ──
+async function launchScrape() {
+  toast('Scraping lancé en arrière-plan...');
+  try {
+    const r = await fetch(API + '/scrape/async', { method: 'POST' });
+    const data = await r.json();
+    if (data.task_id) {
+      toast('Pipeline lancé ! Task ID: ' + data.task_id.slice(0, 8) + '...');
+      pollTask(data.task_id);
+    } else { toast(data.message || 'Erreur', true); }
+  } catch (e) { toast('Erreur lancement scraping', true); }
+}
+
+async function pollTask(taskId) {
+  const check = async () => {
+    try {
+      const data = await fetch(`${API}/tasks/${taskId}/status`).then(r => r.json());
+      if (data.ready) {
+        if (data.status === 'SUCCESS') {
+          const res = data.result || {};
+          toast(`Scraping terminé ! ${res.total || '?'} produits traités`);
+          loadDashboard();
+        } else { toast('Erreur: ' + (data.error || 'inconnue'), true); }
+      } else { setTimeout(check, 5000); }
+    } catch (e) { setTimeout(check, 10000); }
+  };
+  setTimeout(check, 5000);
+}
+
+// ── SEARCH ON ENTER ──
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadProducts(1); });
+
+// ── INIT ──
+loadDashboard();
+loadCategoryFilter();
+loadProducts(1);
+loadCategories();
+</script>
+</body>
+</html>

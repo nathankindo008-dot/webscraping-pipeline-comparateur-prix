@@ -1,77 +1,87 @@
-"""
-models.py — SQLAlchemy ORM
-Correspondance exacte avec schema.sql
-"""
+DROP TABLE IF EXISTS price_history CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
 
-from datetime import datetime, timezone
-from sqlalchemy import (
-    Column, Integer, String, Text, Numeric, DateTime,
-    ForeignKey, CheckConstraint, UniqueConstraint, func
-)
-from sqlalchemy.orm import relationship, DeclarativeBase
+CREATE TABLE products (
+    id          SERIAL PRIMARY KEY,
+    product_url TEXT        NOT NULL UNIQUE,
+    name        TEXT        NOT NULL,
+    category    VARCHAR(60) NOT NULL,
+    currency    CHAR(3)     NOT NULL DEFAULT 'XOF',
+    image_url   TEXT,
+    page_url    TEXT,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
+CREATE INDEX idx_products_category ON products(category);
 
-class Base(DeclarativeBase):
-    pass
+CREATE TABLE price_history (
+    id            SERIAL PRIMARY KEY,
+    product_id    INTEGER     NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    price         NUMERIC(12, 0) NOT NULL,
+    old_price     NUMERIC(12, 0),
+    discount_pct  NUMERIC(5, 2),
+    reviews_count INTEGER     NOT NULL DEFAULT 0,
+    scraped_at    TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT chk_price_positive CHECK (price > 0),
+    CONSTRAINT chk_old_price_coherent CHECK (old_price IS NULL OR old_price > price),
+    CONSTRAINT chk_discount_range CHECK (discount_pct IS NULL OR (discount_pct >= 0 AND discount_pct <= 100))
+);
 
+CREATE INDEX idx_price_history_product_id   ON price_history(product_id);
+CREATE INDEX idx_price_history_scraped_at   ON price_history(scraped_at DESC);
+CREATE INDEX idx_price_history_product_date ON price_history(product_id, scraped_at DESC);
 
-class Product(Base):
-    __tablename__ = "products"
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-    id          = Column(Integer, primary_key=True, autoincrement=True)
-    product_url = Column(Text, nullable=False, unique=True)
-    name        = Column(Text, nullable=False)
-    category    = Column(String(60), nullable=False)
-    currency    = Column(String(3), nullable=False, default="XOF")
-    image_url   = Column(Text)
-    page_url    = Column(Text)
-    created_at  = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at  = Column(DateTime(timezone=True), server_default=func.now(),
-                         onupdate=func.now())
+CREATE TRIGGER trg_products_updated_at
+    BEFORE UPDATE ON products
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
-    # Relation 1-N vers price_history
-    price_snapshots = relationship(
-        "PriceHistory",
-        back_populates="product",
-        cascade="all, delete-orphan",
-        order_by="PriceHistory.scraped_at.desc()"
-    )
+CREATE VIEW v_latest_prices AS
+SELECT
+    p.id            AS product_id,
+    p.name,
+    p.category,
+    p.product_url,
+    p.image_url,
+    ph.price,
+    ph.old_price,
+    ph.discount_pct,
+    ph.reviews_count,
+    ph.scraped_at   AS last_scraped_at
+FROM products p
+JOIN LATERAL (
+    SELECT *
+    FROM price_history
+    WHERE product_id = p.id
+    ORDER BY scraped_at DESC
+    LIMIT 1
+) ph ON TRUE;
 
-    @property
-    def latest_price(self):
-        """Retourne le snapshot de prix le plus récent."""
-        if self.price_snapshots:
-            return self.price_snapshots[0]
-        return None
-
-    def __repr__(self):
-        return f"<Product id={self.id} category={self.category!r} name={self.name[:40]!r}>"
-
-
-class PriceHistory(Base):
-    __tablename__ = "price_history"
-
-    __table_args__ = (
-        CheckConstraint("price > 0",                         name="chk_price_positive"),
-        CheckConstraint("old_price IS NULL OR old_price > price",
-                                                             name="chk_old_price_coherent"),
-        CheckConstraint("discount_pct IS NULL OR (discount_pct >= 0 AND discount_pct <= 100)",
-                                                             name="chk_discount_range"),
-    )
-
-    id            = Column(Integer, primary_key=True, autoincrement=True)
-    product_id    = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"),
-                           nullable=False, index=True)
-    price         = Column(Numeric(12, 0), nullable=False)
-    old_price     = Column(Numeric(12, 0), nullable=True)
-    discount_pct  = Column(Numeric(5, 2),  nullable=True)
-    reviews_count = Column(Integer, nullable=False, default=0)
-    scraped_at    = Column(DateTime(timezone=True), nullable=False, index=True)
-    created_at    = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relation N-1 vers products
-    product = relationship("Product", back_populates="price_snapshots")
-
-    def __repr__(self):
-        return (f"<PriceHistory product_id={self.product_id} "
-                f"price={self.price} scraped_at={self.scraped_at}>")
+CREATE VIEW v_price_evolution AS
+SELECT
+    p.id            AS product_id,
+    p.name,
+    p.category,
+    p.product_url,
+    MIN(ph.price)   AS price_min,
+    MAX(ph.price)   AS price_max,
+    (
+        SELECT price FROM price_history
+        WHERE product_id = p.id
+        ORDER BY scraped_at DESC LIMIT 1
+    )               AS price_current,
+    COUNT(ph.id)    AS nb_snapshots,
+    MIN(ph.scraped_at) AS first_seen,
+    MAX(ph.scraped_at) AS last_seen
+FROM products p
+JOIN price_history ph ON ph.product_id = p.id
+GROUP BY p.id, p.name, p.category, p.product_url;

@@ -1,0 +1,41 @@
+[
+  {
+    "name": "Samsung Galaxy A06 - 4G - 2 SIM - 6.7\" - 4/64Go - Noir",
+    "category": "telephones-tablettes",
+    "price": 45700,
+    "old_price": 60000,
+    "discount": "24%",
+    "currency": "XOF",
+    "reviews_count": 854,
+    "product_url": "https://www.jumia.ci/samsung-galaxy-a06-31825552.html",
+    "image_url": "https://ci.jumia.is/product/25/552813/1.jpg",
+    "page_url": "https://www.jumia.ci/telephone-tablette/",
+    "scraped_at": "2026-03-13T10:58:49.667136"
+  },
+  {
+    "name": "Nasco TV LED Slim 32\" - HD - Noir",
+    "category": "tv-electronique",
+    "price": 43900,
+    "old_price": 56900,
+    "discount": "23%",
+    "currency": "XOF",
+    "reviews_count": 16091,
+    "product_url": "https://www.jumia.ci/nasco-slim-tv-led-32-13905321.html",
+    "image_url": "https://ci.jumia.is/product/12/350931/1.jpg",
+    "page_url": "https://www.jumia.ci/electronique/",
+    "scraped_at": "2026-03-13T10:58:53.799901"
+  },
+  {
+    "name": "Roch Sardines a l'huile Vegetale 125G",
+    "category": "supermarche",
+    "price": 345,
+    "old_price": 400,
+    "discount": "14%",
+    "currency": "XOF",
+    "reviews_count": 113,
+    "product_url": "https://www.jumia.ci/roch-sardines-125g-30146420.html",
+    "image_url": "https://ci.jumia.is/product/02/464103/1.jpg",
+    "page_url": "https://www.jumia.ci/epicerie/",
+    "scraped_at": "2026-03-13T10:59:18.853788"
+  }
+]

@@ -2,8 +2,9 @@
 scrapy==2.11.2
 itemadapter==0.9.0
 
-# Nettoyage données
+# Nettoyage données + export
 pandas==2.2.3
+openpyxl==3.1.5
 
 # API
 flask==3.1.0

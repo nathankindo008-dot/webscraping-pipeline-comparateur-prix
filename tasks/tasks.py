@@ -145,13 +145,23 @@ def clean_and_insert(self, scrape_result=None):
                     product.name = row["name"]
                     nb_updated += 1
 
-                # Snapshot de prix (toujours inséré, même si le produit existait)
+                import math
+                def safe_int(val, default=0):
+                    if val is None or (isinstance(val, float) and math.isnan(val)):
+                        return default
+                    return int(val)
+
+                def safe_float(val):
+                    if val is None or (isinstance(val, float) and math.isnan(val)):
+                        return None
+                    return float(val)
+
                 snapshot = PriceHistory(
                     product_id    = product.id,
-                    price         = int(row["price"]),
-                    old_price     = int(row["old_price"]) if row["old_price"] else None,
-                    discount_pct  = float(row["discount_pct"]) if row["discount_pct"] else None,
-                    reviews_count = int(row.get("reviews_count", 0)),
+                    price         = safe_int(row["price"]),
+                    old_price     = safe_int(row["old_price"], default=None) if safe_float(row["old_price"]) else None,
+                    discount_pct  = safe_float(row["discount_pct"]),
+                    reviews_count = safe_int(row.get("reviews_count", 0)),
                     scraped_at    = scraped_at,
                 )
                 session.add(snapshot)

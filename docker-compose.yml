@@ -31,7 +31,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./api/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jumia_user} -d ${POSTGRES_DB:-jumia_db}"]
       interval: 10s
@@ -68,8 +68,10 @@ services:
     environment:
       DATABASE_URL:  postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
       REDIS_URL:     redis://redis:6379/0
-      FLASK_DEBUG:   ${FLASK_DEBUG:-false}
-      FLASK_ENV:     ${FLASK_ENV:-production}
+      FLASK_DEBUG:   "false"
+      FLASK_ENV:     "production"
+      DEBUG_METRICS: "1"
+      PYTHONPATH:    /app
     ports:
       - "5000:5000"
     depends_on:
@@ -118,7 +120,7 @@ services:
       dockerfile: Dockerfile
     container_name: jumia_beat
     restart: unless-stopped
-    command: celery -A tasks.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
       REDIS_URL:    redis://redis:6379/0
@@ -127,8 +129,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - beat_data:/app/beat
 
   # ───────────────────────────────────────────
   # 6. Prometheus

@@ -10,14 +10,24 @@ Endpoints :
   GET  /categories                → liste des catégories + stats
   GET  /categories/<cat>/products → produits d'une catégorie
   GET  /search?q=...              → recherche textuelle
+  POST /scrape                    → lancer le scraping (synchrone)
+  POST /scrape/async              → lancer le scraping (Celery)
+  GET  /tasks/<id>/status         → statut d'une tâche Celery
+  GET  /export                    → export CSV / Excel / JSON
   GET  /health                    → statut de l'API
+  GET  /metrics                   → métriques Prometheus
 """
+import sys
+import os
+os.environ.setdefault("PYTHONUTF8", "1")
 
-from flask import Flask, jsonify, request, abort
+import io
+import csv
+from flask import Flask, jsonify, request, abort, Response, send_file, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, text
 from flasgger import Swagger
-import os
+from prometheus_flask_exporter import PrometheusMetrics
 
 from models import Base, Product, PriceHistory
 from schemas import (
@@ -32,8 +42,8 @@ app = Flask(__name__)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL",
-    "postgresql://jumia_user:jumia_pass@localhost:5432/jumia_db"
-)
+    "postgresql://jumia_user:jumia_pass@localhost:5433/jumia_db"
+) + "?client_encoding=utf8"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JSON_SORT_KEYS"] = False
 
@@ -58,6 +68,12 @@ swagger_template = {
     "basePath": "/",
 }
 swagger = Swagger(app, config=swagger_config, template=swagger_template)
+
+# ─────────────────────────────────────────────
+# Prometheus Metrics
+# ─────────────────────────────────────────────
+metrics = PrometheusMetrics(app, defaults_prefix="jumia_api")
+metrics.info("app_info", "Comparateur de Prix Jumia CI", version="1.0.0")
 
 
 # ─────────────────────────────────────────────
@@ -84,6 +100,15 @@ def latest_price_subquery():
         .group_by(PriceHistory.product_id)
         .subquery()
     )
+
+
+# ─────────────────────────────────────────────
+# 0. GET / — Frontend Web
+# ─────────────────────────────────────────────
+@app.route("/", methods=["GET"])
+def index():
+    """Page d'accueil — Dashboard interactif."""
+    return render_template("index.html")
 
 
 # ─────────────────────────────────────────────
@@ -524,6 +549,233 @@ def search_products():
         "pagination": {"page": page, "per_page": per_page, "total": total,
                        "pages": -(-total // per_page)},
     }), 200
+
+
+# ─────────────────────────────────────────────
+# 9. POST /scrape  (synchrone — Bronze)
+# ─────────────────────────────────────────────
+@app.route("/scrape", methods=["POST"])
+def scrape_sync():
+    """
+    Lance le scraping de manière synchrone (bloquant).
+    ---
+    tags: [Scraping]
+    responses:
+      200:
+        description: Scraping terminé avec succès
+      500:
+        description: Erreur pendant le scraping
+    """
+    import subprocess
+    from pathlib import Path
+
+    scraper_dir = Path(__file__).parent.parent / "scraper"
+    raw_data_path = scraper_dir / "raw_data.json"
+
+    try:
+        result = subprocess.run(
+            ["scrapy", "crawl", "jumia_ci"],
+            cwd=str(scraper_dir),
+            capture_output=True,
+            text=True,
+            timeout=3600,
+        )
+
+        if result.returncode != 0:
+            return jsonify({
+                "status": "error",
+                "message": "Le scraping a échoué",
+                "stderr": result.stderr[:500],
+            }), 500
+
+        import json
+        nb_items = 0
+        if raw_data_path.exists():
+            with open(raw_data_path, encoding="utf-8") as f:
+                nb_items = len(json.load(f))
+
+        return jsonify({
+            "status": "ok",
+            "message": f"Scraping terminé : {nb_items} items récupérés",
+            "raw_items": nb_items,
+        }), 200
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "error", "message": "Timeout dépassé (1h)"}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ─────────────────────────────────────────────
+# 10. POST /scrape/async  (Celery — Argent)
+# ─────────────────────────────────────────────
+@app.route("/scrape/async", methods=["POST"])
+def scrape_async():
+    """
+    Lance le pipeline complet de scraping via Celery (non-bloquant).
+    Retourne un task_id pour suivre l'avancement.
+    ---
+    tags: [Scraping]
+    responses:
+      202:
+        description: Tâche lancée avec succès
+        schema:
+          properties:
+            status:
+              type: string
+            task_id:
+              type: string
+            check_url:
+              type: string
+      500:
+        description: Celery indisponible
+    """
+    try:
+        from tasks.tasks import full_pipeline
+        result = full_pipeline.delay()
+        return jsonify({
+            "status": "accepted",
+            "message": "Pipeline de scraping lancé en arrière-plan",
+            "task_id": result.id,
+            "check_url": f"/tasks/{result.id}/status",
+        }), 202
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Impossible de lancer la tâche Celery : {e}",
+        }), 500
+
+
+# ─────────────────────────────────────────────
+# 11. GET /tasks/<task_id>/status  (Argent)
+# ─────────────────────────────────────────────
+@app.route("/tasks/<string:task_id>/status", methods=["GET"])
+def task_status(task_id):
+    """
+    Vérifie le statut d'une tâche Celery.
+    ---
+    tags: [Scraping]
+    parameters:
+      - name: task_id
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Statut de la tâche
+    """
+    try:
+        from tasks.celery_app import celery_app as celery
+        result = celery.AsyncResult(task_id)
+
+        response = {
+            "task_id": task_id,
+            "status": result.status,
+            "ready": result.ready(),
+        }
+
+        if result.ready():
+            if result.successful():
+                response["result"] = result.result
+            else:
+                response["error"] = str(result.result)
+
+        return jsonify(response), 200
+    except Exception as e:
+        return jsonify({"task_id": task_id, "status": "UNKNOWN", "error": str(e)}), 200
+
+
+# ─────────────────────────────────────────────
+# 12. GET /export  (Feature avancée — Or)
+# ─────────────────────────────────────────────
+@app.route("/export", methods=["GET"])
+def export_data():
+    """
+    Exporte les données en CSV, Excel ou JSON.
+    ---
+    tags: [Export]
+    parameters:
+      - name: format
+        in: query
+        type: string
+        enum: [csv, excel, json]
+        default: csv
+      - name: category
+        in: query
+        type: string
+        description: Filtrer par catégorie (optionnel)
+    responses:
+      200:
+        description: Fichier téléchargeable
+      400:
+        description: Format non supporté
+    """
+    fmt = request.args.get("format", "csv").lower()
+    if fmt not in ("csv", "excel", "json"):
+        abort(400, description="Formats supportés : csv, excel, json")
+
+    sub = latest_price_subquery()
+    query = (
+        db.session.query(Product, PriceHistory)
+        .join(sub, Product.id == sub.c.product_id)
+        .join(PriceHistory, (PriceHistory.product_id == sub.c.product_id) &
+                            (PriceHistory.scraped_at == sub.c.max_scraped_at))
+    )
+
+    if cat := request.args.get("category"):
+        query = query.filter(Product.category == cat)
+
+    query = query.order_by(Product.category, PriceHistory.price.asc())
+    results = query.all()
+
+    rows = []
+    for p, ph in results:
+        rows.append({
+            "id": p.id,
+            "name": p.name,
+            "category": p.category,
+            "price": float(ph.price) if ph.price else 0,
+            "old_price": float(ph.old_price) if ph.old_price else "",
+            "discount_pct": float(ph.discount_pct) if ph.discount_pct else "",
+            "currency": p.currency,
+            "reviews_count": ph.reviews_count,
+            "product_url": p.product_url,
+            "image_url": p.image_url or "",
+            "scraped_at": ph.scraped_at.isoformat() if ph.scraped_at else "",
+        })
+
+    if fmt == "json":
+        return jsonify({"products": rows, "total": len(rows)}), 200
+
+    if fmt == "csv":
+        if not rows:
+            return Response("", mimetype="text/csv",
+                            headers={"Content-Disposition": "attachment;filename=jumia_export.csv"})
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=jumia_export.csv"},
+        )
+
+    if fmt == "excel":
+        try:
+            import pandas as pd
+            df = pd.DataFrame(rows)
+            output = io.BytesIO()
+            df.to_excel(output, index=False, sheet_name="Produits Jumia CI")
+            output.seek(0)
+            return send_file(
+                output,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                as_attachment=True,
+                download_name="jumia_export.xlsx",
+            )
+        except ImportError:
+            abort(400, description="openpyxl requis pour l'export Excel. Utilisez format=csv.")
 
 
 # ─────────────────────────────────────────────
