@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Mon Espace{% endblock %}
+{% block extra_css %}
+<style>
+.greeting{font-size:.88rem;color:var(--text2);margin-bottom:1.5rem}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem}
+@media(max-width:768px){.stats-row{grid-template-columns:1fr}}
+.products-grid{grid-template-columns:repeat(4,1fr)!important}
+@media(max-width:1100px){.products-grid{grid-template-columns:repeat(3,1fr)!important}}
+@media(max-width:768px){.products-grid{grid-template-columns:repeat(2,1fr)!important}}
+.tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:1.5rem;overflow-x:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab-btn{padding:.7rem 1.2rem;font-size:.85rem;font-weight:600;color:var(--muted);border:none;border-bottom:3px solid transparent;background:none;cursor:pointer;font-family:inherit;white-space:nowrap;transition:.15s;margin-bottom:-2px}
+.tab-btn:hover{color:var(--orange)}
+.tab-btn.active{color:var(--orange);border-bottom-color:var(--orange)}
+.alert-item{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem}
+.alert-item .info{flex:1}
+.alert-item .info .name{font-weight:700;font-size:.9rem}
+.alert-item .info .sub{font-size:.72rem;color:var(--muted)}
+.alert-item .target{font-size:1.05rem;font-weight:800;color:#d97706;white-space:nowrap}
+.drop-item{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;transition:.15s}
+.drop-item:hover{transform:translateX(3px)}
+.drop-item img{width:48px;height:48px;object-fit:contain;border-radius:8px;background:var(--light);flex-shrink:0}
+.drop-item .info{flex:1;min-width:0}
+.drop-item .info .name{font-weight:700;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drop-item .info .prices{font-size:.78rem;color:var(--muted)}
+.drop-item .info .prices strong{color:var(--green)}
+.drop-item .pct{font-size:1.15rem;font-weight:800;color:var(--green);white-space:nowrap}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:100%;padding:1.5rem 2.5rem">
+  <h1 class="section-title">👤 Mon Espace</h1>
+  <p class="greeting" id="greeting">Chargement...</p>
+  <div class="stats-row" id="myStats"></div>
+  <div class="tabs">
+    <button onclick="showTab('favs',this)" class="tab-btn active">❤️ Favoris</button>
+    <button onclick="showTab('alerts',this)" class="tab-btn">🔔 Alertes</button>
+    <button onclick="showTab('drops',this)" class="tab-btn">📉 Baisses</button>
+  </div>
+  <div id="tabContent"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let myData=null,currentTab='favs';
+function onAuthSuccess(){loadSpace()}
+function showTab(tab,btn){
+  currentTab=tab;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderTab();
+}
+function renderTab(){
+  const c=document.getElementById('tabContent');
+  if(!myData){c.innerHTML='<div class="empty">Chargement...</div>';return}
+  if(currentTab==='favs'){
+    if(!myData.favorites.length){c.innerHTML='<div class="card empty"><div class="icon">❤️</div><p>Aucun favori. <a href="/boutique" style="color:var(--orange);font-weight:700">Parcourez la boutique</a> et cliquez sur le coeur !</p></div>';return}
+    c.innerHTML='<div class="products-grid">'+myData.favorites.map(productCard).join('')+'</div>';
+  }
+  else if(currentTab==='alerts'){
+    if(!myData.active_alerts.length){c.innerHTML='<div class="card empty"><div class="icon">🔔</div><p>Aucune alerte. Sur un produit, cliquez "Alerte" pour etre notifie par email.</p></div>';return}
+    c.innerHTML=myData.active_alerts.map(a=>`
+      <div class="card alert-item">
+        <div class="info"><div class="name">${a.product_name}</div><div class="sub">Produit #${a.product_id}</div></div>
+        <div class="target">&lt; ${fmt(a.target_price)}</div>
+        <button onclick="delAlert(${a.id})" class="btn-red">Supprimer</button>
+      </div>`).join('');
+  }
+  else if(currentTab==='drops'){
+    if(!myData.weekly_drops.length){c.innerHTML='<div class="card empty"><div class="icon">📉</div><p>Aucune baisse detectee cette semaine.</p></div>';return}
+    c.innerHTML=myData.weekly_drops.map(d=>`
+      <a href="/historique/${d.product_id}" class="card drop-item" style="display:flex;text-decoration:none">
+        <img src="${d.image_url||''}" alt="" onerror="this.style.display='none'">
+        <div class="info">
+          <div class="name">${d.name}</div>
+          <div class="prices"><s>${fmt(d.price_before)}</s> → <strong>${fmt(d.price_after)}</strong> · Economie ${fmt(d.savings)}</div>
+        </div>
+        <div class="pct">-${d.drop_pct}%</div>
+      </a>`).join('');
+  }
+}
+async function delAlert(id){
+  try{const r=await authF(API+'/me/alerts/'+id,{method:'DELETE'});if(!r.ok){toast('Erreur','error');return}toast('Alerte supprimee','success');loadSpace()}catch(e){toast('Erreur','error')}
+}
+async function loadSpace(){
+  if(!token){
+    document.getElementById('greeting').textContent='Connectez-vous pour acceder a votre espace.';
+    document.getElementById('tabContent').innerHTML='<div class="card" style="text-align:center;padding:3rem"><div style="font-size:3rem;margin-bottom:.75rem">🔒</div><p style="color:var(--text2);margin-bottom:1.25rem">Vous devez etre connecte.</p><button onclick="showAuth(\'login\')" class="btn-jumia" style="margin-right:.5rem">Se connecter</button><button onclick="showAuth(\'signup\')" class="btn-ghost">S\'inscrire</button></div>';
+    return;
+  }
+  try{
+    const r=await authF(API+'/me/dashboard');const data=await r.json();
+    if(!r.ok){if(r.status===401){token=null;user=null;localStorage.removeItem('jwt');localStorage.removeItem('u');updateNav();document.getElementById('greeting').textContent='Session expiree.';document.getElementById('tabContent').innerHTML='<div class="card" style="text-align:center;padding:3rem"><div style="font-size:3rem;margin-bottom:.75rem">🔒</div><p style="color:var(--text2);margin-bottom:1.25rem">Session expiree.</p><button onclick="showAuth(\'login\')" class="btn-jumia">Se reconnecter</button></div>';return}toast(data.message||'Erreur','error');return}
+    myData=data;
+    document.getElementById('greeting').textContent='Bienvenue '+(user?user.name:'')+' — votre tableau de bord';
+    document.getElementById('myStats').innerHTML=`
+      <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">❤️ Favoris</p><p style="font-size:2rem;font-weight:800" class="gradient-text">${myData.stats.nb_favorites}</p></div>
+      <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🔔 Alertes actives</p><p style="font-size:2rem;font-weight:800;color:#d97706">${myData.stats.nb_active_alerts}</p></div>
+      <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">📉 Baisses semaine</p><p style="font-size:2rem;font-weight:800;color:var(--green)">${myData.stats.nb_weekly_drops}</p></div>`;
+    renderTab();
+  }catch(e){toast('Erreur chargement','error')}
+}
+loadSpace();
+</script>
+{% endblock %}
