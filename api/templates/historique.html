@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Historique des prix{% endblock %}
+{% block extra_css %}
+<style>
+.hist-form{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:2rem}
+.hist-form input{padding:.75rem 1rem;border:2px solid var(--border);border-radius:var(--radius);font-size:.88rem;outline:none;font-family:inherit;width:180px;transition:.15s}
+.hist-form input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(246,139,30,.1)}
+.prod-header{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.prod-header img{width:80px;height:80px;object-fit:contain;border-radius:var(--radius);background:var(--light);flex-shrink:0}
+.prod-header .info{flex:1;min-width:200px}
+.prod-header .info .meta{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.3rem}
+.prod-header .info .meta .badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:.6rem;font-weight:800;text-transform:uppercase;color:#fff}
+.prod-header .info .meta .badge.jumia{background:var(--orange)}.prod-header .info .meta .badge.djok{background:var(--purple)}
+.prod-header .info .meta .tag{font-size:.72rem;background:var(--light);border:1px solid var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-weight:600}
+.var-badge{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:5px}
+.var-badge.up{background:#fef2f2;color:var(--red)}.var-badge.down{background:#f0fdf4;color:var(--green)}.var-badge.flat{background:var(--light);color:var(--muted)}
+.prod-header .info h2{font-size:1.15rem;font-weight:800}
+.prod-header .actions{display:flex;gap:.4rem;flex-wrap:wrap}
+.chart-wrap{position:relative;height:380px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:960px">
+  <h1 class="section-title">📈 Historique des prix</h1>
+  <p class="section-sub">Suivez l'evolution du prix d'un produit</p>
+  <form class="hist-form" onsubmit="event.preventDefault();loadH()">
+    <input type="number" id="hId" placeholder="ID du produit" value="{{ product_id or '' }}">
+    <button type="submit" class="btn-jumia">Voir l'historique</button>
+    <a href="/boutique" class="btn-ghost">Parcourir les produits</a>
+  </form>
+  <div id="result"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let chart=null;
+async function loadH(id){
+  if(!id)id=document.getElementById('hId').value;
+  if(!id){toast('Entrez un ID','warning');return}
+  document.getElementById('hId').value=id;
+  try{
+    const r=await fetch(`${API}/products/${id}/history?limit=60`);
+    if(!r.ok){const e=await r.json();toast(e.message||'Produit introuvable','error');return}
+    const d=await r.json();
+    if(!d.history||d.history.length===0){document.getElementById('result').innerHTML='<div class="card empty"><div class="icon">📉</div><p>Aucun historique de prix pour ce produit.</p></div>';return}
+    const v=d.price_variation_pct,vC=v>0?'up':v<0?'down':'flat',vS=v>0?'+':'';
+    const latest=d.history[0];
+    const s=d.source||'jumia_ci',sl=s==='djokstore_ci'?'DjokStore':'Jumia',sc=s==='djokstore_ci'?'djok':'jumia';
+
+    document.getElementById('result').innerHTML=`
+      <div class="card" style="margin-bottom:1.25rem">
+        <div class="prod-header">
+          <img src="${d.image_url||''}" alt="" onerror="this.style.display='none'">
+          <div class="info">
+            <div class="meta">
+              <span class="badge ${sc}">${sl}</span>
+              <span class="tag">${fCat(d.category)}</span>
+              <span class="tag">${d.nb_snapshots} snapshot(s)</span>
+              ${v!==null?`<span class="var-badge ${vC}">${vS}${v}%</span>`:''}
+            </div>
+            <h2>${d.name}</h2>
+            ${latest?`<div class="gradient-text" style="font-size:1.6rem;font-weight:800;margin-top:.3rem">${fmt(latest.price)}</div>`:''}
+          </div>
+          <div class="actions">
+            <a href="${d.product_url}" target="_blank" class="btn-ghost btn-sm">Voir sur le site →</a>
+            <button onclick="openAlert(${id},'${esc(d.name)}')" class="btn-jumia btn-sm">🔔 Alerte</button>
+            <button onclick="toggleFav(${id})" class="btn-ghost btn-sm">❤️ Favori</button>
+          </div>
+        </div>
+      </div>
+      <div class="card"><div class="chart-wrap"><canvas id="hCanvas"></canvas></div></div>`;
+
+    const labels=d.history.map(h=>new Date(h.scraped_at).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})).reverse();
+    const prices=d.history.map(h=>h.price).reverse();
+    const oldP=d.history.map(h=>h.old_price).reverse();
+    if(chart)chart.destroy();
+    chart=new Chart(document.getElementById('hCanvas'),{type:'line',data:{labels,datasets:[
+      {label:'Prix actuel',data:prices,borderColor:'#F68B1E',backgroundColor:'rgba(246,139,30,.08)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#F68B1E',pointBorderColor:'#fff',pointBorderWidth:2},
+      {label:'Ancien prix',data:oldP,borderColor:'#d1d5db',backgroundColor:'transparent',borderDash:[5,5],tension:.4,pointRadius:2,borderWidth:1.5}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:13,weight:'bold'}}}},scales:{
+      x:{grid:{display:false},ticks:{font:{size:11},maxRotation:45}},
+      y:{beginAtZero:false,grid:{color:'rgba(0,0,0,.05)'},ticks:{callback:v=>fmt(v),font:{weight:'bold'}}}
+    }}});
+  }catch(e){toast('Erreur','error')}
+}
+{% if product_id %}loadH({{ product_id }});{% endif %}
+</script>
+{% endblock %}

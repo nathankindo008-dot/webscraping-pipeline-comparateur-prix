@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}JumiaPrix CI{% endblock %} — Comparateur de Prix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --orange:#F68B1E;--orange-dark:#E07C15;--orange-darker:#CC6A00;--orange-light:#FFB84D;--orange-bg:#FFF8F0;
+  --dark:#1a1a2e;--dark2:#16213e;--dark3:#0f3460;
+  --text:#111827;--text2:#4b5563;--muted:#9ca3af;--light:#f9fafb;--border:#e5e7eb;
+  --green:#10b981;--red:#ef4444;--purple:#8b5cf6;--blue:#3b82f6;--yellow:#eab308;
+  --shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);
+  --shadow-xl:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);
+  --radius:12px;--radius-lg:16px;
+}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--light);color:var(--text);line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
+a{color:inherit;text-decoration:none}
+img{max-width:100%}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+
+.gradient-text{background:linear-gradient(135deg,var(--orange),var(--orange-darker));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+/* CARD */
+.card{background:#fff;padding:1.5rem;border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);transition:all .3s ease}
+.card:hover{box-shadow:var(--shadow-xl);transform:translateY(-3px)}
+.kpi-card{position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,var(--orange),var(--orange-darker));border-radius:0 4px 4px 0}
+
+/* BUTTONS */
+.btn-jumia{background:linear-gradient(135deg,var(--orange),var(--orange-darker));color:#fff;font-weight:700;padding:.75rem 1.5rem;border-radius:10px;border:none;box-shadow:0 4px 14px rgba(246,139,30,.3);transition:all .3s;cursor:pointer;font-family:inherit;font-size:.875rem;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
+.btn-jumia:hover{box-shadow:0 6px 20px rgba(246,139,30,.45);transform:scale(1.03)}
+.btn-ghost{background:transparent;border:1.5px solid var(--border);color:var(--text2);font-weight:600;padding:.65rem 1.25rem;border-radius:10px;transition:all .2s;cursor:pointer;font-family:inherit;font-size:.875rem;display:inline-flex;align-items:center;gap:.4rem}
+.btn-ghost:hover{border-color:var(--orange);color:var(--orange)}
+.btn-sm{padding:.4rem .85rem;font-size:.8rem}
+.btn-red{background:var(--red);color:#fff;border:none;font-weight:700;padding:.5rem 1rem;border-radius:8px;cursor:pointer;font-family:inherit;font-size:.8rem;transition:.2s}
+.btn-red:hover{opacity:.9}
+
+/* NAV */
+.nav{background:linear-gradient(135deg,var(--dark),var(--dark2) 50%,var(--dark3));color:#fff;position:sticky;top:0;z-index:100;box-shadow:0 4px 30px rgba(0,0,0,.3)}
+.nav-inner{max-width:1300px;margin:0 auto;padding:0 1.25rem;display:flex;align-items:center;height:64px;gap:.75rem}
+.logo{display:flex;align-items:center;gap:.65rem;flex-shrink:0}
+.logo-icon{width:40px;height:40px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.logo-text h1{font-size:1.15rem;font-weight:800;line-height:1.1}
+.logo-text p{font-size:.6rem;color:var(--orange-light);display:flex;align-items:center;gap:4px}
+.logo-text .dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.nav-links{display:flex;align-items:center;gap:2px;margin-left:auto;overflow-x:auto}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{padding:.45rem .85rem;border-radius:8px;font-size:.82rem;font-weight:500;color:rgba(255,255,255,.75);transition:.15s;white-space:nowrap}
+.nav-links a:hover{background:rgba(255,255,255,.1);color:#fff}
+.nav-links a.active{background:rgba(255,255,255,.15);color:var(--orange-light);font-weight:700}
+.nav-right{display:flex;align-items:center;gap:.5rem;flex-shrink:0;margin-left:.75rem}
+.nav-right button,.nav-right a{font-family:inherit}
+.nav-login{padding:.4rem 1rem;border-radius:8px;border:1.5px solid rgba(255,255,255,.3);color:#fff;font-size:.82rem;font-weight:500;background:transparent;cursor:pointer;transition:.15s}
+.nav-login:hover{background:rgba(255,255,255,.1)}
+.nav-signup{padding:.4rem 1rem;border-radius:8px;background:var(--orange);color:#fff;font-size:.82rem;font-weight:700;border:none;cursor:pointer;transition:.15s}
+.nav-signup:hover{background:var(--orange-dark)}
+.user-chip{display:flex;align-items:center;gap:.4rem;background:rgba(255,255,255,.1);padding:.3rem .5rem .3rem .75rem;border-radius:50px;transition:.15s;color:#fff;font-size:.82rem;font-weight:600}
+.user-chip:hover{background:rgba(255,255,255,.2)}
+.user-chip .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange-darker));display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;color:#fff}
+
+/* CONTAINER */
+.container{max-width:1300px;margin:0 auto;padding:1.5rem 1.25rem}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal-box{background:#fff;border-radius:var(--radius-lg);padding:2rem;width:420px;max-width:92vw;box-shadow:var(--shadow-xl);position:relative}
+.modal-box h2{font-size:1.4rem;font-weight:800;margin-bottom:.2rem}
+.modal-box .sub{color:var(--muted);font-size:.85rem;margin-bottom:1.25rem}
+.modal-box input{width:100%;padding:.75rem 1rem;border:2px solid var(--border);border-radius:10px;font-size:.88rem;margin-bottom:.6rem;outline:none;font-family:inherit;transition:.15s}
+.modal-box input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(246,139,30,.1)}
+.modal-box .close{position:absolute;top:1rem;right:1rem;width:32px;height:32px;border-radius:8px;background:var(--light);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;color:var(--muted);transition:.15s}
+.modal-box .close:hover{background:#fee2e2;color:var(--red);border-color:#fca5a5}
+.modal-box .sw{text-align:center;color:var(--muted);font-size:.82rem;margin-top:.85rem}
+.modal-box .sw a{color:var(--orange);font-weight:700;cursor:pointer}
+.modal-box .sw a:hover{text-decoration:underline}
+
+/* PRODUCT CARD */
+.products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:1rem}
+.p-card{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--border);overflow:hidden;transition:all .3s;cursor:pointer;position:relative}
+.p-card:hover{box-shadow:var(--shadow-xl);transform:translateY(-4px);border-color:var(--orange)}
+.p-img{position:relative;background:var(--light);height:200px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.p-img img{max-height:175px;max-width:88%;object-fit:contain;transition:transform .3s}
+.p-card:hover .p-img img{transform:scale(1.06)}
+.src-badge{position:absolute;top:8px;left:8px;padding:2px 8px;border-radius:5px;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#fff}
+.src-badge.jumia{background:var(--orange)}
+.src-badge.djok{background:var(--purple)}
+.disc-badge{position:absolute;top:8px;right:8px;background:var(--red);color:#fff;padding:2px 8px;border-radius:5px;font-size:.72rem;font-weight:700}
+.fav-btn{position:absolute;bottom:8px;right:8px;width:32px;height:32px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.12);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.9rem;transition:.15s;z-index:2}
+.fav-btn:hover{transform:scale(1.15);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.p-body{padding:.9rem 1rem}
+.p-cat{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:.25rem}
+.p-name{font-size:.85rem;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.4rem;line-height:1.35;color:var(--text)}
+.p-prices{display:flex;align-items:baseline;gap:.4rem;margin-top:.45rem}
+.p-price{font-size:1.1rem;font-weight:800}
+.p-old{font-size:.78rem;color:var(--muted);text-decoration:line-through}
+.p-foot{display:flex;align-items:center;justify-content:space-between;margin-top:.6rem;padding-top:.6rem;border-top:1px solid #f3f4f6}
+.p-reviews{font-size:.7rem;color:var(--muted)}
+.alert-btn{padding:.3rem .6rem;border-radius:20px;background:var(--light);border:1px solid var(--border);color:var(--text2);font-size:.7rem;cursor:pointer;font-family:inherit;font-weight:600;transition:.15s}
+.alert-btn:hover{background:#fef3c7;border-color:#fcd34d;color:#92400e}
+
+/* PAGINATION */
+.pagination{display:flex;justify-content:center;align-items:center;gap:.4rem;margin:2rem 0 1rem;flex-wrap:wrap}
+.pagination button,.pagination span{padding:.4rem .85rem;border-radius:8px;font-size:.85rem;font-weight:500;font-family:inherit}
+.pagination button{background:#fff;border:1px solid var(--border);color:var(--text);cursor:pointer;transition:.15s}
+.pagination button:hover{border-color:var(--orange);color:var(--orange)}
+.pagination .current{background:var(--orange);color:#fff;border:none;font-weight:700;padding:.45rem .9rem}
+.pagination .info{color:var(--muted);font-size:.8rem}
+
+/* TOAST */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:.5rem}
+.toast-msg{padding:.75rem 1.25rem;border-radius:var(--radius);font-weight:600;font-size:.85rem;color:#fff;box-shadow:var(--shadow-lg);animation:slideIn .3s ease-out}
+.toast-msg.success{background:var(--green)}.toast-msg.error{background:var(--red)}
+.toast-msg.info{background:linear-gradient(135deg,var(--orange),var(--orange-darker))}.toast-msg.warning{background:var(--yellow);color:#78350f}
+@keyframes slideIn{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* SECTION */
+.section-title{font-size:1.5rem;font-weight:800;color:var(--text);margin-bottom:.2rem}
+.section-sub{color:var(--muted);font-size:.9rem;margin-bottom:1.5rem}
+.empty{text-align:center;padding:3rem;color:var(--muted)}
+.empty .icon{font-size:2.5rem;margin-bottom:.5rem}
+
+/* FOOTER */
+.site-footer{margin-top:auto;border-top:1px solid var(--border);background:#fff;padding:1.25rem}
+.site-footer .inner{max-width:1300px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.82rem;color:var(--muted)}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .nav-inner{gap:.3rem}.logo-text{display:none}
+  .nav-links a{padding:.35rem .5rem;font-size:.75rem}
+  .container{padding:1rem .75rem}
+  .products-grid{grid-template-columns:repeat(2,1fr);gap:.65rem}
+  .p-img{height:145px}.p-body{padding:.7rem}
+  .p-name{font-size:.78rem;min-height:2rem}.p-price{font-size:.95rem}
+}
+</style>
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="logo">
+      <div class="logo-icon">🛒</div>
+      <div class="logo-text">
+        <h1>JumiaPrix CI</h1>
+        <p><span class="dot"></span> Comparateur Temps Reel</p>
+      </div>
+    </a>
+    <div class="nav-links">
+      <a href="/" class="{% if active_page == 'accueil' %}active{% endif %}">Accueil</a>
+      <a href="/boutique" class="{% if active_page == 'boutique' %}active{% endif %}">Boutique</a>
+      <a href="/comparer" class="{% if active_page == 'comparer' %}active{% endif %}">Comparer</a>
+      <a href="/categories-view" class="{% if active_page == 'categories' %}active{% endif %}">Categories</a>
+      <a href="/historique" class="{% if active_page == 'historique' %}active{% endif %}">Historique</a>
+      <a href="/mon-espace" id="navMySpace" class="{% if active_page == 'espace' %}active{% endif %}" style="display:none">Mon Espace</a>
+      <a href="/admin" class="{% if active_page == 'admin' %}active{% endif %}">Admin</a>
+    </div>
+    <div class="nav-right" id="navRight">
+      <button class="nav-login" onclick="showAuth('login')">Connexion</button>
+      <button class="nav-signup" onclick="showAuth('signup')">S'inscrire</button>
+    </div>
+  </div>
+</nav>
+
+<div class="modal-overlay" id="authModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('authModal')">&times;</button>
+    <h2 id="authTitle">Connexion</h2>
+    <p class="sub" id="authSub">Connectez-vous pour suivre vos prix</p>
+    <div id="signupFields" style="display:none"><input type="text" id="authName" placeholder="Votre nom complet"></div>
+    <input type="email" id="authEmail" placeholder="Adresse email">
+    <input type="password" id="authPassword" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')submitAuth()">
+    <button class="btn-jumia" style="width:100%" onclick="submitAuth()" id="authBtn" data-mode="login">Se connecter</button>
+    <p class="sw" id="authSw">Pas de compte ? <a onclick="showAuth('signup')">S'inscrire</a></p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="alertModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('alertModal')">&times;</button>
+    <h2>🔔 Alerte de prix</h2>
+    <p class="sub" id="alertLabel"></p>
+    <input type="hidden" id="alertPid">
+    <input type="number" id="alertTarget" placeholder="Prix cible en XOF (ex: 25000)" onkeydown="if(event.key==='Enter')submitAlert()">
+    <p style="color:var(--muted);font-size:.78rem;margin-bottom:.75rem">Vous recevrez un email quand le prix passe sous ce seuil.</p>
+    <button class="btn-jumia" style="width:100%" onclick="submitAlert()">Creer l'alerte</button>
+  </div>
+</div>
+
+{% block content %}{% endblock %}
+
+<footer class="site-footer">
+  <div class="inner">
+    <span><strong>🛒 JumiaPrix CI</strong> — Comparez mieux, achetez au bon prix.</span>
+    <span>Jumia CI & DjokStore CI — ENSEA Projet</span>
+  </div>
+</footer>
+
+<script>
+const API='';
+let token=localStorage.getItem('jwt');
+let user=JSON.parse(localStorage.getItem('u')||'null');
+let favIds=new Set();
+
+if(!token||!user){window.location.href='/login';}
+
+function authH(){return token?{Authorization:'Bearer '+token}:{}}
+function authF(u,o={}){o.headers={...o.headers,...authH()};return fetch(u,o)}
+function fmt(p){if(!p&&p!==0)return'—';return Math.round(p).toLocaleString('fr-FR')+' XOF'}
+function fCat(c){return c?c.replace(/-/g,' ').replace(/\b\w/g,l=>l.toUpperCase()):''}
+function esc(s){return(s||'').replace(/'/g,"\\'").substring(0,60)}
+
+function toast(m,type){
+  const t=document.createElement('div');
+  t.className='toast-msg '+(type||'info');t.textContent=m;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(()=>t.remove(),3500);
+}
+
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+
+function updateNav(){
+  const nr=document.getElementById('navRight'),ms=document.getElementById('navMySpace');
+  if(user){
+    nr.innerHTML=`<a href="/mon-espace" class="user-chip"><span>${user.name}</span><div class="avatar">${(user.name||'?')[0].toUpperCase()}</div></a><button class="nav-login" onclick="logout()">Deconnexion</button>`;
+    ms.style.display='';loadFavIds();
+  }else{
+    nr.innerHTML='<button class="nav-login" onclick="showAuth(\'login\')">Connexion</button><button class="nav-signup" onclick="showAuth(\'signup\')">S\'inscrire</button>';
+    ms.style.display='none';favIds.clear();
+  }
+}
+function showAuth(mode){
+  document.getElementById('authModal').classList.add('show');
+  const s=mode==='signup';
+  document.getElementById('authTitle').textContent=s?'Creer un compte':'Connexion';
+  document.getElementById('authSub').textContent=s?'Inscrivez-vous gratuitement':'Accedez a votre espace';
+  document.getElementById('signupFields').style.display=s?'':'none';
+  const btn=document.getElementById('authBtn');btn.textContent=s?'Creer mon compte':'Se connecter';btn.dataset.mode=mode;
+  document.getElementById('authSw').innerHTML=s?'Deja inscrit ? <a onclick="showAuth(\'login\')">Connexion</a>':'Pas de compte ? <a onclick="showAuth(\'signup\')">S\'inscrire</a>';
+}
+async function submitAuth(){
+  const mode=document.getElementById('authBtn').dataset.mode||'login';
+  const body=mode==='signup'?{email:document.getElementById('authEmail').value,password:document.getElementById('authPassword').value,name:document.getElementById('authName').value}:{email:document.getElementById('authEmail').value,password:document.getElementById('authPassword').value};
+  try{const r=await fetch(API+(mode==='signup'?'/auth/signup':'/auth/login'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();if(!r.ok){toast(d.message||'Erreur','error');return}
+  token=d.access_token;user=d.user;localStorage.setItem('jwt',token);localStorage.setItem('u',JSON.stringify(user));
+  updateNav();closeModal('authModal');toast('Bienvenue '+user.name+' !','success');
+  if(typeof onAuthSuccess==='function')onAuthSuccess()}catch(e){toast('Erreur reseau','error')}
+}
+function logout(){token=null;user=null;localStorage.removeItem('jwt');localStorage.removeItem('u');toast('Deconnecte','info');window.location.href='/login'}
+async function loadFavIds(){if(!token)return;try{const r=await authF(API+'/me/favorites');if(!r.ok)return;const d=await r.json();favIds=new Set((d.favorites||[]).map(f=>f.id))}catch(e){}}
+async function toggleFav(pid,ev){
+  if(ev){ev.preventDefault();ev.stopPropagation()}
+  if(!token){showAuth('login');return}
+  if(favIds.has(pid)){const r=await authF(API+'/me/favorites/'+pid,{method:'DELETE'});if(!r.ok)return;favIds.delete(pid);toast('Retire des favoris','info')}
+  else{const r=await authF(API+'/me/favorites',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:pid})});if(!r.ok)return;favIds.add(pid);toast('Ajoute aux favoris !','success')}
+  document.querySelectorAll(`.fav-btn[data-id="${pid}"]`).forEach(b=>b.textContent=favIds.has(pid)?'❤️':'🤍');
+}
+function openAlert(pid,name,ev){
+  if(ev){ev.preventDefault();ev.stopPropagation()}
+  if(!token){showAuth('login');return}
+  document.getElementById('alertModal').classList.add('show');
+  document.getElementById('alertPid').value=pid;document.getElementById('alertLabel').textContent=name;document.getElementById('alertTarget').value='';
+}
+async function submitAlert(){
+  const pid=+document.getElementById('alertPid').value,tp=+document.getElementById('alertTarget').value;
+  if(!tp||tp<=0){toast('Prix invalide','error');return}
+  try{const r=await authF(API+'/me/alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:pid,target_price:tp})});
+  const d=await r.json();if(!r.ok){toast(d.message||'Erreur','error');return}
+  closeModal('alertModal');toast('Alerte creee !','success')}catch(e){toast('Erreur','error')}
+}
+
+function productCard(p){
+  const s=p.source||'jumia_ci',sl=s==='djokstore_ci'?'DjokStore':'Jumia',sc=s==='djokstore_ci'?'djok':'jumia';
+  return `<div class="p-card" onclick="window.location='/historique/${p.id}'">
+    <div class="p-img">
+      <span class="src-badge ${sc}">${sl}</span>
+      ${p.discount_pct?`<span class="disc-badge">-${Math.round(p.discount_pct)}%</span>`:''}
+      <img src="${p.image_url||''}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect fill=%22%23f3f4f6%22 width=%2280%22 height=%2280%22/><text x=%2240%22 y=%2244%22 text-anchor=%22middle%22 font-size=%2211%22 fill=%22%239ca3af%22>Photo</text></svg>'">
+      <button class="fav-btn" data-id="${p.id}" onclick="toggleFav(${p.id},event)">${favIds.has(p.id)?'❤️':'🤍'}</button>
+    </div>
+    <div class="p-body">
+      <div class="p-cat">${fCat(p.category)}</div>
+      <div class="p-name">${p.name}</div>
+      <div class="p-prices"><span class="p-price gradient-text">${fmt(p.price)}</span>${p.old_price?`<span class="p-old">${fmt(p.old_price)}</span>`:''}</div>
+      <div class="p-foot">
+        <span class="p-reviews">${p.reviews_count||0} avis</span>
+        <button class="alert-btn" onclick="openAlert(${p.id},'${esc(p.name)}',event)">🔔 Alerte</button>
+      </div>
+    </div></div>`
+}
+
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay.show').forEach(m=>m.classList.remove('show'))});
+updateNav();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

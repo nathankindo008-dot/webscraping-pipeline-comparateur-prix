@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Boutique{% endblock %}
+{% block extra_css %}
+<style>
+.shop-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
+.shop-header h1{font-size:1.5rem;font-weight:800}
+.shop-header .cnt{font-size:.85rem;color:var(--muted)}
+.shop-header .cnt strong{color:var(--orange)}
+.filter-bar{background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);padding:1rem 1.25rem;margin-bottom:1.25rem}
+.filter-row{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end}
+.fg{display:flex;flex-direction:column;gap:.25rem;flex:1;min-width:170px}
+.fg.sm{flex:0;min-width:100px}
+.fg label{font-size:.6rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px}
+.fg input,.fg select{padding:.6rem .75rem;border:2px solid var(--border);border-radius:8px;font-size:.85rem;outline:none;font-family:inherit;transition:.15s;background:#fff}
+.fg input:focus,.fg select:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(246,139,30,.1)}
+.fg select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .7rem center;padding-right:2rem}
+.tags{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}
+.tag{display:inline-flex;align-items:center;gap:.3rem;background:var(--orange-bg);border:1px solid rgba(246,139,30,.2);color:var(--orange-darker);font-size:.75rem;font-weight:600;padding:.3rem .7rem;border-radius:30px}
+.tag button{background:none;border:none;cursor:pointer;color:var(--orange-darker);font-size:.85rem;padding:0;line-height:1}
+.tag button:hover{color:var(--red)}
+@media(max-width:768px){.fg{min-width:calc(50% - .5rem)}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="shop-header">
+    <div><h1>🛍️ Boutique</h1><p style="font-size:.88rem;color:var(--text2)">Tous les produits Jumia CI et DjokStore CI reunis</p></div>
+    <div class="cnt" id="countBar"></div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-row">
+      <div class="fg"><label>Recherche</label><input type="text" id="fSearch" placeholder="Nom du produit..."></div>
+      <div class="fg sm" style="min-width:130px"><label>Site</label>
+        <select id="fSource"><option value="">Tous</option><option value="jumia_ci">Jumia CI</option><option value="djokstore_ci">DjokStore CI</option></select>
+      </div>
+      <div class="fg sm" style="min-width:150px"><label>Categorie</label><select id="fCat"><option value="">Toutes</option></select></div>
+      <div class="fg sm" style="min-width:130px"><label>Trier par</label>
+        <select id="fSort"><option value="price_asc">Prix ↑</option><option value="price_desc">Prix ↓</option><option value="discount_desc">Promos</option><option value="reviews_desc">Avis</option></select>
+      </div>
+      <div class="fg sm"><label>Min</label><input type="number" id="fMin" placeholder="0"></div>
+      <div class="fg sm"><label>Max</label><input type="number" id="fMax" placeholder="∞"></div>
+      <button onclick="search(1)" class="btn-jumia btn-sm" style="align-self:flex-end">Filtrer</button>
+    </div>
+  </div>
+
+  <div class="tags" id="activeTags"></div>
+  <div class="products-grid" id="grid"></div>
+  <div class="pagination" id="pag"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PP=20;let curPage=1;
+function getP(){return{q:document.getElementById('fSearch').value.trim(),source:document.getElementById('fSource').value,category:document.getElementById('fCat').value,sort:document.getElementById('fSort').value,min_price:document.getElementById('fMin').value,max_price:document.getElementById('fMax').value}}
+
+function showTags(p,total){
+  let tags=[];
+  if(p.q)tags.push({l:'🔍 '+p.q,c:()=>{document.getElementById('fSearch').value='';search(1)}});
+  if(p.source)tags.push({l:'🌐 '+(p.source==='jumia_ci'?'Jumia':'DjokStore'),c:()=>{document.getElementById('fSource').value='';search(1)}});
+  if(p.category)tags.push({l:'📁 '+fCat(p.category),c:()=>{document.getElementById('fCat').value='';search(1)}});
+  if(p.min_price)tags.push({l:'Min: '+fmt(+p.min_price),c:()=>{document.getElementById('fMin').value='';search(1)}});
+  if(p.max_price)tags.push({l:'Max: '+fmt(+p.max_price),c:()=>{document.getElementById('fMax').value='';search(1)}});
+  document.getElementById('activeTags').innerHTML=tags.map((t,i)=>`<span class="tag">${t.l} <button onclick="window._clr[${i}]()">✕</button></span>`).join('');
+  window._clr=tags.map(t=>t.c);
+  document.getElementById('countBar').innerHTML=`<strong>${total}</strong> produit${total>1?'s':''}`;
+}
+
+async function search(page){
+  curPage=page||1;const p=getP();
+  const us=new URLSearchParams();if(p.q)us.set('q',p.q);if(p.source)us.set('source',p.source);if(p.category)us.set('category',p.category);if(p.sort)us.set('sort',p.sort);if(p.min_price)us.set('min_price',p.min_price);if(p.max_price)us.set('max_price',p.max_price);
+  history.replaceState({},'','/boutique'+(us.toString()?'?'+us:''));
+  let url;
+  if(p.q){url=`${API}/search?q=${encodeURIComponent(p.q)}&page=${curPage}&per_page=${PP}`;if(p.category)url+='&category='+encodeURIComponent(p.category);if(p.source)url+='&source='+encodeURIComponent(p.source)}
+  else{url=`${API}/products?page=${curPage}&per_page=${PP}&sort=${p.sort}`;if(p.category)url+='&category='+encodeURIComponent(p.category);if(p.source)url+='&source='+encodeURIComponent(p.source);if(p.min_price)url+='&min_price='+p.min_price;if(p.max_price)url+='&max_price='+p.max_price}
+  try{const r=await fetch(url);const d=await r.json();if(!r.ok){toast(d.message||'Erreur','error');return}
+    const prods=d.products||[],pg=d.pagination||{};showTags(p,pg.total||0);
+    document.getElementById('grid').innerHTML=prods.length?prods.map(productCard).join(''):'<div class="empty" style="grid-column:1/-1"><div class="icon">🔍</div><p>Aucun produit avec ces filtres</p></div>';
+    const tp=pg.pages||1;let h='';
+    if(curPage>1)h+=`<button onclick="search(${curPage-1})">← Prec</button>`;
+    const s=Math.max(1,curPage-2),e=Math.min(tp,curPage+2);
+    for(let i=s;i<=e;i++)h+=i===curPage?`<span class="current">${i}</span>`:`<button onclick="search(${i})">${i}</button>`;
+    if(curPage<tp)h+=`<button onclick="search(${curPage+1})">Suiv →</button>`;
+    h+=`<span class="info">${pg.total} resultats</span>`;
+    document.getElementById('pag').innerHTML=h;
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){toast('Erreur','error')}
+}
+
+['fSource','fCat','fSort'].forEach(id=>document.getElementById(id).addEventListener('change',()=>search(1)));
+document.getElementById('fSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search(1)}});
+['fMin','fMax'].forEach(id=>document.getElementById(id).addEventListener('change',()=>search(1)));
+
+async function initB(){
+  try{const d=await fetch(API+'/categories').then(r=>r.json());const sel=document.getElementById('fCat');d.categories.forEach(c=>{const o=document.createElement('option');o.value=c.category;o.textContent=fCat(c.category)+' ('+c.nb_products+')';sel.appendChild(o)})}catch(e){}
+  const u=new URLSearchParams(location.search);
+  if(u.get('q'))document.getElementById('fSearch').value=u.get('q');
+  if(u.get('source'))document.getElementById('fSource').value=u.get('source');
+  if(u.get('category'))document.getElementById('fCat').value=u.get('category');
+  if(u.get('sort'))document.getElementById('fSort').value=u.get('sort');
+  if(u.get('min_price'))document.getElementById('fMin').value=u.get('min_price');
+  if(u.get('max_price'))document.getElementById('fMax').value=u.get('max_price');
+  search(1);
+}
+initB();
+</script>
+{% endblock %}

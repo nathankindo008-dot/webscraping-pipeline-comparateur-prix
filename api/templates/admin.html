@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Admin Scraping{% endblock %}
+{% block extra_css %}
+<style>
+.admin-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem}
+.admin-header h1{display:flex;align-items:center;gap:.5rem}
+.admin-header .actions{display:flex;gap:.5rem}
+
+.schedule-bar{background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center}
+.sched-item{display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text2)}
+.sched-item .icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0}
+.sched-item .icon.pipe{background:rgba(246,139,30,.1)}.sched-item .icon.drop{background:rgba(16,185,129,.1)}
+.sched-item .icon.alert{background:rgba(234,179,8,.1)}.sched-item .icon.health{background:rgba(59,130,246,.1)}
+.sched-item strong{color:var(--text);font-weight:700}
+
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin-bottom:1.5rem}
+
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.status-dot.ok{background:var(--green)}.status-dot.err{background:var(--red)}.status-dot.run{background:var(--orange);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.logs-table{width:100%;background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden}
+.logs-table table{width:100%;border-collapse:collapse;font-size:.82rem}
+.logs-table th{background:var(--light);padding:.65rem .85rem;text-align:left;font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;border-bottom:2px solid var(--border)}
+.logs-table td{padding:.65rem .85rem;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+.logs-table tr:hover{background:#fefce8}
+.logs-table .src{font-size:.65rem;font-weight:800;text-transform:uppercase;padding:2px 6px;border-radius:4px;color:#fff;letter-spacing:.3px}
+.logs-table .src.jumia{background:var(--orange)}.logs-table .src.djok{background:var(--purple)}
+.logs-table .st{font-size:.72rem;font-weight:700;display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px}
+.logs-table .st.ok{background:#f0fdf4;color:var(--green)}.logs-table .st.err{background:#fef2f2;color:var(--red)}
+.logs-table .st.run{background:var(--orange-bg);color:var(--orange)}
+.logs-table .nums{font-variant-numeric:tabular-nums}
+.logs-table .muted{color:var(--muted)}
+.logs-table .err-msg{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:var(--red)}
+
+.empty-state{text-align:center;padding:3rem;color:var(--muted)}
+.empty-state .icon{font-size:2.5rem;margin-bottom:.5rem}
+
+@media(max-width:768px){
+  .logs-table{overflow-x:auto}
+  .logs-table table{min-width:700px}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="admin-header">
+    <div>
+      <h1 class="section-title">🛠️ Admin Scraping</h1>
+      <p class="section-sub" style="margin-bottom:0">Historique des scrapes, planification et controle</p>
+    </div>
+    <div class="actions">
+      <button class="btn-jumia" onclick="launchScrape()" id="scrapeBtn">🔄 Lancer Scrape</button>
+      <button class="btn-ghost" onclick="loadData()">🔃 Rafraichir</button>
+    </div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div class="schedule-bar">
+    <span style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Planification :</span>
+    <div class="sched-item"><div class="icon pipe">🔄</div> <strong>Pipeline complet</strong> — <span id="schPipe">...</span></div>
+    <div class="sched-item"><div class="icon drop">📉</div> <strong>Baisses prix</strong> — <span id="schDrop">...</span></div>
+    <div class="sched-item"><div class="icon alert">🔔</div> <strong>Alertes</strong> — <span id="schAlert">...</span></div>
+    <div class="sched-item"><div class="icon health">💚</div> <strong>Health</strong> — <span id="schHealth">...</span></div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🔄 Total scrapes</p><p style="font-size:2rem;font-weight:800" class="gradient-text" id="kTotal">—</p></div>
+    <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">✅ Succes</p><p style="font-size:2rem;font-weight:800;color:var(--green)" id="kSuccess">—</p></div>
+    <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">❌ Erreurs</p><p style="font-size:2rem;font-weight:800;color:var(--red)" id="kErrors">—</p></div>
+    <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🟠 Dernier Jumia</p><p style="font-size:.95rem;font-weight:700;color:var(--orange)" id="kLastJ">—</p></div>
+    <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🟣 Dernier DjokStore</p><p style="font-size:.95rem;font-weight:700;color:var(--purple)" id="kLastD">—</p></div>
+  </div>
+
+  <!-- LOGS TABLE -->
+  <div class="logs-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Statut</th>
+          <th>Source</th>
+          <th>Date</th>
+          <th>Duree</th>
+          <th>Bruts</th>
+          <th>Propres</th>
+          <th>Nouveaux</th>
+          <th>Maj</th>
+          <th>Erreur</th>
+        </tr>
+      </thead>
+      <tbody id="logBody">
+        <tr><td colspan="9" class="empty-state"><div class="icon">📋</div>Chargement...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fmtDate(iso){
+  if(!iso)return '—';
+  const d=new Date(iso);
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function fmtDur(sec){
+  if(!sec&&sec!==0)return '—';
+  if(sec<60)return sec.toFixed(1)+'s';
+  return Math.floor(sec/60)+'m '+Math.round(sec%60)+'s';
+}
+
+async function launchScrape(){
+  const btn=document.getElementById('scrapeBtn');
+  btn.textContent='⏳ En cours...';btn.style.opacity='.6';btn.disabled=true;
+  toast('Pipeline lance...','info');
+  try{
+    const r=await fetch('/scrape/async',{method:'POST'});
+    const d=await r.json();
+    if(r.ok){toast('Pipeline lance ! Rafraichissez dans ~1 min','success')}
+    else toast(d.message||'Erreur','error');
+  }catch(e){toast('Erreur reseau','error')}
+  setTimeout(()=>{btn.textContent='🔄 Lancer Scrape';btn.style.opacity='1';btn.disabled=false},3000);
+}
+
+async function loadData(){
+  try{
+    const d=await fetch('/admin/scrape-logs?limit=50').then(r=>r.json());
+    const s=d.summary;
+
+    document.getElementById('kTotal').textContent=s.total_runs;
+    document.getElementById('kSuccess').textContent=s.success_runs;
+    document.getElementById('kErrors').textContent=s.error_runs;
+    document.getElementById('kLastJ').textContent=s.last_jumia?fmtDate(s.last_jumia):'Aucun';
+    document.getElementById('kLastD').textContent=s.last_djokstore?fmtDate(s.last_djokstore):'Aucun';
+
+    const sc=d.schedule;
+    document.getElementById('schPipe').textContent=sc.full_pipeline;
+    document.getElementById('schDrop').textContent=sc.check_drops;
+    document.getElementById('schAlert').textContent=sc.check_alerts;
+    document.getElementById('schHealth').textContent=sc.health_check;
+
+    const body=document.getElementById('logBody');
+    if(!d.logs.length){
+      body.innerHTML='<tr><td colspan="9" class="empty-state"><div class="icon">📋</div>Aucun scrape enregistre. Lancez un scrape !</td></tr>';
+      return;
+    }
+    body.innerHTML=d.logs.map(l=>{
+      const src=l.source==='djokstore_ci'?'djok':'jumia';
+      const srcLabel=l.source==='djokstore_ci'?'DjokStore':'Jumia';
+      const stCls=l.status==='success'?'ok':l.status==='running'?'run':'err';
+      const stLabel=l.status==='success'?'Succes':l.status==='running'?'En cours':'Erreur';
+      return `<tr>
+        <td><span class="st ${stCls}"><span class="status-dot ${stCls}"></span>${stLabel}</span></td>
+        <td><span class="src ${src}">${srcLabel}</span></td>
+        <td class="nums">${fmtDate(l.started_at)}</td>
+        <td class="nums">${fmtDur(l.duration_sec)}</td>
+        <td class="nums">${l.items_raw||'—'}</td>
+        <td class="nums">${l.items_clean||'—'}</td>
+        <td class="nums" style="color:var(--green);font-weight:700">${l.items_new!==null?l.items_new:'—'}</td>
+        <td class="nums">${l.items_updated!==null?l.items_updated:'—'}</td>
+        <td>${l.error_msg?`<span class="err-msg" title="${l.error_msg}">${l.error_msg}</span>`:'—'}</td>
+      </tr>`}).join('');
+  }catch(e){console.error(e);toast('Erreur chargement','error')}
+}
+
+loadData();
+</script>
+{% endblock %}
