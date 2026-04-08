@@ -1,0 +1,79 @@
+# =============================================================
+# .dockerignore — Comparateur de Prix Jumia CI
+# Exclut du contexte de build tout ce qui n'est pas utile à l'image.
+# Résultat : builds plus rapides et images plus légères.
+# =============================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Environnement (jamais dans l'image, injecté par Docker Compose)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+.Python
+pip-wheel-metadata/
+
+# Tests / cache outils
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# IDE / éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Données volumineuses générées (ne doivent pas être embarquées dans l'image)
+*.json
+*.csv
+*.xlsx
+*.log
+!raw_data_sample.json
+
+# Volumes Docker / données runtime
+postgres_data/
+redis_data/
+prometheus_data/
+grafana_data/
+airflow_data/
+
+# Docs / ressources (inutiles dans l'image applicative)
+README.md
+*.md
+docs/
+captures/
+screenshots/
+
+# Docker lui-même (éviter la récursion)
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+
+# Artefacts divers
+*.bak
+*.tmp
+*.orig
