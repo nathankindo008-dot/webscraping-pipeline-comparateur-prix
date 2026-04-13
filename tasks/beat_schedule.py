@@ -6,9 +6,10 @@ Le beat_schedule est défini dans celery_app.py (centralisé).
 Ce fichier documente les tâches planifiées.
 
 Tâches planifiées :
-  1. scrape-jumia-daily        → Pipeline complet tous les jours à 2h
-  2. check-price-drops-daily   → Détection baisses de prix à 6h
-  3. health-check-every-5min   → Vérification santé toutes les 5 min
+  1. scrape-jumia-daily             → Pipeline complet tous les jours à 2h
+  2. check-price-drops-daily        → Détection baisses de prix à 6h
+  3. check-major-drops-every-5min   → Détection baisses majeures (>100%) toutes les 5 min
+  4. check-user-alerts-daily        → Vérification alertes utilisateurs à 3h
 
 Comment ça marche :
   1. Celery Beat tourne en permanence (comme une horloge)

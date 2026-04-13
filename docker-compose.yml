@@ -1,5 +1,3 @@
-version: "3.9"
-
 # =============================================================
 # Comparateur de Prix Jumia CI — Docker Compose
 # ENSEA — AS Data Science | Dr N'golo Konate
@@ -9,9 +7,10 @@ version: "3.9"
 #   redis      → Broker Celery + cache
 #   api        → API Flask
 #   worker     → Celery worker (exécute les scrapes)
-#   beat       → Celery Beat (planificateur)
+#   beat       → Celery Beat (planificateur périodique)
 #   prometheus → Collecte des métriques
 #   grafana    → Dashboard de monitoring
+#   airflow-*  → Apache Airflow (orchestrateur visuel de pipeline)
 # =============================================================
 
 services:
@@ -30,6 +29,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./api/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./airflow/init-airflow-db.sql:/docker-entrypoint-initdb.d/02_airflow.sql:ro
     ports:
       - "5433:5432"
     healthcheck:
@@ -68,9 +68,12 @@ services:
     environment:
       DATABASE_URL:  postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
       REDIS_URL:     redis://redis:6379/0
+      SECRET_KEY:    ${SECRET_KEY:-dev-secret-change-in-production}
       FLASK_DEBUG:   "false"
       FLASK_ENV:     "production"
-      DEBUG_METRICS: "1"
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_TIMEOUT: ${GROQ_TIMEOUT:-30}
       PYTHONPATH:    /app
     ports:
       - "5000:5000"
@@ -81,7 +84,7 @@ services:
         condition: service_healthy
     volumes:
       - ./api:/app/api
-      - scraper_data:/app/scraper
+      - ./scraper:/app/scraper
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -90,7 +93,19 @@ services:
       start_period: 15s
 
   # ───────────────────────────────────────────
-  # 4. Celery Worker
+  # 4. FlareSolverr (bypass Cloudflare pour Jumia)
+  # ───────────────────────────────────────────
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: jumia_flaresolverr
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+    ports:
+      - "8191:8191"
+
+  # ───────────────────────────────────────────
+  # 5. Celery Worker
   # ───────────────────────────────────────────
   worker:
     build:
@@ -101,15 +116,20 @@ services:
     command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
-      REDIS_URL:    redis://redis:6379/0
+      REDIS_URL:       redis://redis:6379/0
+      FLARESOLVERR_URL: http://flaresolverr:8191/v1
+      GMAIL_USER:      ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      PYTHONPATH:      /app
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      flaresolverr:
+        condition: service_started
     volumes:
       - ./scraper:/app/scraper
-      - scraper_data:/app/scraper_output
 
   # ───────────────────────────────────────────
   # 5. Celery Beat (planificateur)
@@ -169,13 +189,91 @@ services:
     depends_on:
       - prometheus
 
+  # ───────────────────────────────────────────
+  # 8. Airflow — Init (migration base + admin)
+  # ───────────────────────────────────────────
+  airflow-init:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: jumia_airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username $${AIRFLOW_ADMIN_USER:-admin} \
+          --password $${AIRFLOW_ADMIN_PASSWORD:-admin123} \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@ensea.ed.ci || true
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/airflow_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-zTnBJnQrIjXqFpF9ZRqV_VZzOl7UaGnRaEqXpKm3bDQ=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ───────────────────────────────────────────
+  # 9. Airflow — Webserver (interface DAGs)
+  # ───────────────────────────────────────────
+  airflow-webserver:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: jumia_airflow_webserver
+    restart: unless-stopped
+    command: airflow webserver --port 8080
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/airflow_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-zTnBJnQrIjXqFpF9ZRqV_VZzOl7UaGnRaEqXpKm3bDQ=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags:ro
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # ───────────────────────────────────────────
+  # 10. Airflow — Scheduler (execute les DAGs)
+  # ───────────────────────────────────────────
+  airflow-scheduler:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: jumia_airflow_scheduler
+    restart: unless-stopped
+    command: airflow scheduler
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/airflow_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-zTnBJnQrIjXqFpF9ZRqV_VZzOl7UaGnRaEqXpKm3bDQ=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./dags:/opt/airflow/dags:ro
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
 # ───────────────────────────────────────────
 # Volumes persistants
 # ───────────────────────────────────────────
 volumes:
   postgres_data:
   redis_data:
-  scraper_data:
-  beat_data:
   prometheus_data:
   grafana_data:
