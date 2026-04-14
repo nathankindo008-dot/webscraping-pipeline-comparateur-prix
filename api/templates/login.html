@@ -67,7 +67,7 @@ body{font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;back
   <div class="left-content">
     <div class="logo-big">🛒</div>
     <h1>Comparez les prix en<br><span>Cote d'Ivoire</span></h1>
-    <p>Trouvez les meilleurs prix sur Jumia CI et DjokStore. Alertes, historique, tableau de bord personnalise.</p>
+    <p>Trouvez les meilleurs prix sur Jumia CI, DjokStore et CoinAfrique. Alertes, historique, tableau de bord personnalise.</p>
     <div class="features-list">
       <div class="feat"><div class="ic">🔍</div> Comparaison de prix multi-sites en temps reel</div>
       <div class="feat"><div class="ic">🔔</div> Alertes email quand le prix baisse</div>
@@ -91,13 +91,21 @@ body{font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;back
       <label>Nom complet</label>
       <input type="text" id="authName" placeholder="Jean Kouassi">
     </div>
-    <div class="field">
+    <div id="usernameField" class="field">
+      <label>Nom d'utilisateur</label>
+      <input type="text" id="authUsername" placeholder="jean_k" autocomplete="username">
+    </div>
+    <div id="emailField" class="field" style="display:none">
       <label>Adresse email</label>
       <input type="email" id="authEmail" placeholder="exemple@email.com">
     </div>
-    <div class="field">
+    <div id="passwordField" class="field">
       <label>Mot de passe</label>
       <input type="password" id="authPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitAuth()">
+    </div>
+    <div id="newPasswordField" class="field" style="display:none">
+      <label>Nouveau mot de passe</label>
+      <input type="password" id="authNewPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitAuth()">
     </div>
 
     <button class="btn-submit" id="authBtn" onclick="submitAuth()">Se connecter</button>
@@ -105,7 +113,8 @@ body{font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;back
     <div class="divider">ou</div>
 
     <p class="switch" id="switchText">
-      Pas de compte ? <a onclick="toggleMode()">Creer un compte</a>
+      Pas de compte ? <a onclick="toggleMode('signup')">Creer un compte</a>
+      <br><a onclick="toggleMode('forgot')" style="font-size:.8rem;color:var(--muted)">Mot de passe oublie ?</a>
     </p>
   </div>
   <div class="footer-text">🛒 JumiaPrix CI — ENSEA Projet</div>
@@ -114,14 +123,26 @@ body{font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;back
 <script>
 let mode='login';
 
-function toggleMode(){
-  mode=mode==='login'?'signup':'login';
-  const s=mode==='signup';
-  document.getElementById('formTitle').textContent=s?'Creer un compte':'Connexion';
-  document.getElementById('formSub').textContent=s?'Inscrivez-vous gratuitement':'Connectez-vous pour acceder au dashboard';
-  document.getElementById('nameField').style.display=s?'':'none';
-  document.getElementById('authBtn').textContent=s?'Creer mon compte':'Se connecter';
-  document.getElementById('switchText').innerHTML=s?'Deja inscrit ? <a onclick="toggleMode()">Se connecter</a>':'Pas de compte ? <a onclick="toggleMode()">Creer un compte</a>';
+function toggleMode(m){
+  mode=m||'login';
+  const isSignup=mode==='signup', isForgot=mode==='forgot', isLogin=mode==='login';
+
+  document.getElementById('formTitle').textContent=isSignup?'Creer un compte':isForgot?'Mot de passe oublie':'Connexion';
+  document.getElementById('formSub').textContent=isSignup?'Inscrivez-vous gratuitement':isForgot?'Entrez votre email pour reinitialiser':'Connectez-vous pour acceder au dashboard';
+
+  document.getElementById('nameField').style.display=isSignup?'':'none';
+  document.getElementById('usernameField').style.display=isForgot?'none':'';
+  document.getElementById('emailField').style.display=(isSignup||isForgot)?'':'none';
+  document.getElementById('passwordField').style.display=isForgot?'none':'';
+  document.getElementById('newPasswordField').style.display=isForgot?'':'none';
+
+  document.getElementById('authBtn').textContent=isSignup?'Creer mon compte':isForgot?'Reinitialiser':'Se connecter';
+
+  let links='';
+  if(isLogin)links='Pas de compte ? <a onclick="toggleMode(\'signup\')">Creer un compte</a><br><a onclick="toggleMode(\'forgot\')" style="font-size:.8rem;color:var(--muted)">Mot de passe oublie ?</a>';
+  else if(isSignup)links='Deja inscrit ? <a onclick="toggleMode(\'login\')">Se connecter</a>';
+  else links='<a onclick="toggleMode(\'login\')">Retour a la connexion</a>';
+  document.getElementById('switchText').innerHTML=links;
 }
 
 function toast(m,type){
@@ -132,20 +153,50 @@ function toast(m,type){
 }
 
 async function submitAuth(){
-  const email=document.getElementById('authEmail').value.trim();
+  if(mode==='forgot'){
+    const email=document.getElementById('authEmail').value.trim();
+    const np=document.getElementById('authNewPassword').value;
+    if(!email){toast('Entrez votre email','error');return}
+    if(!np||np.length<6){toast('Nouveau mot de passe (6 car. min)','error');return}
+    try{
+      const r=await fetch('/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,new_password:np})});
+      const d=await r.json();
+      if(!r.ok){toast(d.message||'Erreur','error');return}
+      toast(d.message,'success');
+      setTimeout(()=>toggleMode('login'),1500);
+    }catch(e){toast('Erreur reseau','error')}
+    return;
+  }
+
+  const username=document.getElementById('authUsername').value.trim();
   const password=document.getElementById('authPassword').value;
-  if(!email||!password){toast('Remplissez tous les champs','error');return}
-  const body=mode==='signup'?{email,password,name:document.getElementById('authName').value.trim()}:{email,password};
-  if(mode==='signup'&&!body.name){toast('Entrez votre nom','error');return}
-  try{
-    const r=await fetch(mode==='signup'?'/auth/signup':'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const d=await r.json();
-    if(!r.ok){toast(d.message||'Erreur','error');return}
-    localStorage.setItem('jwt',d.access_token);
-    localStorage.setItem('u',JSON.stringify(d.user));
-    toast('Bienvenue '+d.user.name+' !','success');
-    setTimeout(()=>window.location.href='/',600);
-  }catch(e){toast('Erreur reseau','error')}
+  if(!username||!password){toast('Remplissez tous les champs','error');return}
+
+  if(mode==='signup'){
+    const email=document.getElementById('authEmail').value.trim();
+    const name=document.getElementById('authName').value.trim();
+    if(!email){toast('Entrez votre email','error');return}
+    if(!name){toast('Entrez votre nom','error');return}
+    try{
+      const r=await fetch('/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,email,password,name})});
+      const d=await r.json();
+      if(!r.ok){toast(d.message||'Erreur','error');return}
+      localStorage.setItem('jwt',d.access_token);
+      localStorage.setItem('u',JSON.stringify(d.user));
+      toast('Bienvenue '+d.user.name+' !','success');
+      setTimeout(()=>window.location.href='/',600);
+    }catch(e){toast('Erreur reseau','error')}
+  } else {
+    try{
+      const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+      const d=await r.json();
+      if(!r.ok){toast(d.message||'Erreur','error');return}
+      localStorage.setItem('jwt',d.access_token);
+      localStorage.setItem('u',JSON.stringify(d.user));
+      toast('Bienvenue '+d.user.name+' !','success');
+      setTimeout(()=>window.location.href='/',600);
+    }catch(e){toast('Erreur reseau','error')}
+  }
 }
 
 if(localStorage.getItem('jwt')&&localStorage.getItem('u')){

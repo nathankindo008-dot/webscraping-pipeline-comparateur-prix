@@ -72,6 +72,7 @@
     <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">❌ Erreurs</p><p style="font-size:2rem;font-weight:800;color:var(--red)" id="kErrors">—</p></div>
     <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🟠 Dernier Jumia</p><p style="font-size:.95rem;font-weight:700;color:var(--orange)" id="kLastJ">—</p></div>
     <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🟣 Dernier DjokStore</p><p style="font-size:.95rem;font-weight:700;color:var(--purple)" id="kLastD">—</p></div>
+    <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🟢 Dernier CoinAfrique</p><p style="font-size:.95rem;font-weight:700;color:#27ae60" id="kLastC">—</p></div>
   </div>
 
   <!-- LOGS TABLE -->
@@ -116,17 +117,20 @@ async function launchScrape(){
   btn.textContent='⏳ En cours...';btn.style.opacity='.6';btn.disabled=true;
   toast('Pipeline lance...','info');
   try{
-    const r=await fetch('/scrape/async',{method:'POST'});
-    const d=await r.json();
-    if(r.ok){toast('Pipeline lance ! Rafraichissez dans ~1 min','success')}
-    else toast(d.message||'Erreur','error');
+    const r=await authF('/scrape/async',{method:'POST'});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===403){toast('Acces administrateur requis','error');window.location.href='/';}
+    else if(r.ok){toast('Pipeline lance ! Rafraichissez dans ~1 min','success')}
+    else toast(d.message||d.description||'Erreur','error');
   }catch(e){toast('Erreur reseau','error')}
   setTimeout(()=>{btn.textContent='🔄 Lancer Scrape';btn.style.opacity='1';btn.disabled=false},3000);
 }
 
 async function loadData(){
   try{
-    const d=await fetch('/admin/scrape-logs?limit=50').then(r=>r.json());
+    const r=await authF('/admin/scrape-logs?limit=50');
+    if(r.status===403){toast('Acces administrateur requis','error');window.location.href='/';return;}
+    const d=await r.json();
     const s=d.summary;
 
     document.getElementById('kTotal').textContent=s.total_runs;
@@ -134,6 +138,7 @@ async function loadData(){
     document.getElementById('kErrors').textContent=s.error_runs;
     document.getElementById('kLastJ').textContent=s.last_jumia?fmtDate(s.last_jumia):'Aucun';
     document.getElementById('kLastD').textContent=s.last_djokstore?fmtDate(s.last_djokstore):'Aucun';
+    document.getElementById('kLastC').textContent=s.last_coinafrique?fmtDate(s.last_coinafrique):'Aucun';
 
     const sc=d.schedule;
     document.getElementById('schPipe').textContent=sc.full_pipeline;
@@ -147,8 +152,8 @@ async function loadData(){
       return;
     }
     body.innerHTML=d.logs.map(l=>{
-      const src=l.source==='djokstore_ci'?'djok':'jumia';
-      const srcLabel=l.source==='djokstore_ci'?'DjokStore':'Jumia';
+      const src={'djokstore_ci':'djok','coinafrique_ci':'coin'}[l.source]||'jumia';
+      const srcLabel={'djokstore_ci':'DjokStore','coinafrique_ci':'CoinAfrique'}[l.source]||'Jumia';
       const stCls=l.status==='success'?'ok':l.status==='running'?'run':'err';
       const stLabel=l.status==='success'?'Succes':l.status==='running'?'En cours':'Erreur';
       return `<tr>
@@ -165,6 +170,17 @@ async function loadData(){
   }catch(e){console.error(e);toast('Erreur chargement','error')}
 }
 
-loadData();
+(async function initAdminPage(){
+  if(!token){window.location.href='/login';return;}
+  try{
+    const r=await authF(API+'/auth/me');
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||d.is_admin!==true){toast('Acces reserve aux administrateurs','error');window.location.href='/';return;}
+    user={id:d.id,email:d.email,name:d.name,is_admin:true};
+    localStorage.setItem('u',JSON.stringify(user));
+    if(typeof updateNav==='function')updateNav();
+    await loadData();
+  }catch(e){window.location.href='/login';}
+})();
 </script>
 {% endblock %}

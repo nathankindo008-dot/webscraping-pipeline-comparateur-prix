@@ -3,8 +3,6 @@ schemas.py — Sérialiseurs JSON pour l'API Flask
 Transforme les objets SQLAlchemy en dictionnaires Python propres.
 """
 
-from decimal import Decimal
-
 
 def _fmt_price(value) -> float | None:
     """Convertit Decimal/None en float ou None."""
@@ -29,6 +27,7 @@ def product_schema(product, price_history) -> dict:
         "id":           product.id,
         "name":         product.name,
         "category":     product.category,
+        "source":       getattr(product, "source", "jumia_ci"),
         "price":        _fmt_price(price_history.price),
         "old_price":    _fmt_price(price_history.old_price),
         "discount_pct": _fmt_price(price_history.discount_pct),
@@ -48,6 +47,7 @@ def product_detail_schema(product, price_history) -> dict:
     base = product_schema(product, price_history)
     base.update({
         "page_url":   product.page_url,
+        "source":     getattr(product, "source", "jumia_ci"),
         "created_at": _fmt_date(product.created_at),
         "updated_at": _fmt_date(product.updated_at),
     })
@@ -82,10 +82,11 @@ def compare_schema(product, price_history) -> dict:
         "id":           product.id,
         "name":         product.name,
         "category":     product.category,
+        "source":       getattr(product, "source", "jumia_ci"),
         "price":        _fmt_price(price_history.price),
         "old_price":    _fmt_price(price_history.old_price),
         "discount_pct": _fmt_price(price_history.discount_pct),
-        "savings":      savings,          # économie en XOF
+        "savings":      savings,
         "currency":     product.currency,
         "reviews_count": price_history.reviews_count,
         "image_url":    product.image_url,

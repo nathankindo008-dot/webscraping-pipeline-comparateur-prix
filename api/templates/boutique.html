@@ -18,14 +18,30 @@
 .tag{display:inline-flex;align-items:center;gap:.3rem;background:var(--orange-bg);border:1px solid rgba(246,139,30,.2);color:var(--orange-darker);font-size:.75rem;font-weight:600;padding:.3rem .7rem;border-radius:30px}
 .tag button{background:none;border:none;cursor:pointer;color:var(--orange-darker);font-size:.85rem;padding:0;line-height:1}
 .tag button:hover{color:var(--red)}
-@media(max-width:768px){.fg{min-width:calc(50% - .5rem)}}
+.cam-btn{
+  align-self:flex-end;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;
+  border:none;border-radius:10px;padding:.6rem .85rem;font-size:1rem;cursor:pointer;
+  transition:.2s;display:flex;align-items:center;gap:.4rem;font-family:inherit;font-weight:700;
+  box-shadow:0 4px 12px rgba(109,40,217,.25);
+}
+.cam-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(109,40,217,.35)}
+.cam-btn .txt{font-size:.75rem}
+.cam-loading{display:none;align-items:center;gap:.6rem;padding:.85rem 1.25rem;background:#f5f3ff;border:2px solid #8b5cf6;border-radius:12px;margin-bottom:1rem;font-size:.88rem;font-weight:600;color:#6d28d9}
+.cam-loading.show{display:flex}
+.cam-loading .spinner{width:20px;height:20px;border:3px solid #c4b5fd;border-top-color:#6d28d9;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cam-result{display:none;padding:.75rem 1.25rem;background:#f5f3ff;border:2px solid #8b5cf6;border-radius:12px;margin-bottom:1rem;font-size:.85rem;color:#6d28d9}
+.cam-result.show{display:flex;align-items:center;gap:.75rem;justify-content:space-between}
+.cam-result .desc{font-weight:700}
+.cam-result .close{background:none;border:none;cursor:pointer;font-size:1.1rem;color:#6d28d9;padding:0}
+@media(max-width:768px){.fg{min-width:calc(50% - .5rem)}.cam-btn .txt{display:none}}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container">
   <div class="shop-header">
-    <div><h1>🛍️ Boutique</h1><p style="font-size:.88rem;color:var(--text2)">Tous les produits Jumia CI et DjokStore CI reunis</p></div>
+    <div><h1>🛍️ Boutique</h1><p style="font-size:.88rem;color:var(--text2)">Tous les produits Jumia CI, DjokStore CI et CoinAfrique reunis</p></div>
     <div class="cnt" id="countBar"></div>
   </div>
 
@@ -33,7 +49,7 @@
     <div class="filter-row">
       <div class="fg"><label>Recherche</label><input type="text" id="fSearch" placeholder="Nom du produit..."></div>
       <div class="fg sm" style="min-width:130px"><label>Site</label>
-        <select id="fSource"><option value="">Tous</option><option value="jumia_ci">Jumia CI</option><option value="djokstore_ci">DjokStore CI</option></select>
+        <select id="fSource"><option value="">Tous</option><option value="jumia_ci">Jumia CI</option><option value="djokstore_ci">DjokStore CI</option><option value="coinafrique_ci">CoinAfrique CI</option></select>
       </div>
       <div class="fg sm" style="min-width:150px"><label>Categorie</label><select id="fCat"><option value="">Toutes</option></select></div>
       <div class="fg sm" style="min-width:130px"><label>Trier par</label>
@@ -42,8 +58,13 @@
       <div class="fg sm"><label>Min</label><input type="number" id="fMin" placeholder="0"></div>
       <div class="fg sm"><label>Max</label><input type="number" id="fMax" placeholder="∞"></div>
       <button onclick="search(1)" class="btn-jumia btn-sm" style="align-self:flex-end">Filtrer</button>
+      <button class="cam-btn" onclick="document.getElementById('camInput').click()"><span>📷</span><span class="txt">Recherche par image</span></button>
+      <input type="file" id="camInput" accept="image/*" capture="environment" style="display:none" onchange="handleImageSearch(this)">
     </div>
   </div>
+
+  <div class="cam-loading" id="camLoading"><div class="spinner"></div> Analyse de l'image par l'IA...</div>
+  <div class="cam-result" id="camResult"><span>🤖 L'IA a identifie : <span class="desc" id="camDesc"></span></span><button class="close" onclick="closeCamResult()">✕</button></div>
 
   <div class="tags" id="activeTags"></div>
   <div class="products-grid" id="grid"></div>
@@ -59,7 +80,7 @@ function getP(){return{q:document.getElementById('fSearch').value.trim(),source:
 function showTags(p,total){
   let tags=[];
   if(p.q)tags.push({l:'🔍 '+p.q,c:()=>{document.getElementById('fSearch').value='';search(1)}});
-  if(p.source)tags.push({l:'🌐 '+(p.source==='jumia_ci'?'Jumia':'DjokStore'),c:()=>{document.getElementById('fSource').value='';search(1)}});
+  if(p.source)tags.push({l:'🌐 '+({'jumia_ci':'Jumia','djokstore_ci':'DjokStore','coinafrique_ci':'CoinAfrique'}[p.source]||p.source),c:()=>{document.getElementById('fSource').value='';search(1)}});
   if(p.category)tags.push({l:'📁 '+fCat(p.category),c:()=>{document.getElementById('fCat').value='';search(1)}});
   if(p.min_price)tags.push({l:'Min: '+fmt(+p.min_price),c:()=>{document.getElementById('fMin').value='';search(1)}});
   if(p.max_price)tags.push({l:'Max: '+fmt(+p.max_price),c:()=>{document.getElementById('fMax').value='';search(1)}});
@@ -93,6 +114,133 @@ async function search(page){
 document.getElementById('fSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search(1)}});
 ['fMin','fMax'].forEach(id=>document.getElementById(id).addEventListener('change',()=>search(1)));
 
+function resizeImage(file, maxW=800){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=function(e){
+      const img=new Image();
+      img.onload=function(){
+        const c=document.createElement('canvas');
+        let w=img.width,h=img.height;
+        if(w>maxW){h=Math.round(h*maxW/w);w=maxW}
+        c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg',0.85));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let _brandsCache=null;
+async function loadBrands(){
+  if(_brandsCache)return _brandsCache;
+  try{const r=await fetch('/search/brands');if(r.ok)_brandsCache=await r.json();}catch(e){}
+  return _brandsCache||[];
+}
+
+async function handleImageSearch(input){
+  if(!input.files||!input.files[0])return;
+  const file=input.files[0];
+  input.value='';
+
+  document.getElementById('camLoading').classList.add('show');
+  document.getElementById('camResult').classList.remove('show');
+
+  try{
+    const [b64,cfg,brands]=await Promise.all([
+      resizeImage(file),
+      fetch('/chat/config').then(r=>r.json()).catch(()=>null),
+      loadBrands()
+    ]);
+
+    if(!cfg||!cfg.api_key){
+      document.getElementById('camLoading').classList.remove('show');
+      toast('Clé Groq non configurée','error');return;
+    }
+
+    const brandList=brands.length?brands.slice(0,50).join(', '):'Samsung, Tecno, Infinix, Xiaomi, iPhone, Apple, Huawei, Nokia, Oppo, Realme, Nike, Adidas';
+
+    const vr=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+cfg.api_key,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages:[
+          {role:'system',content:`Tu identifies des produits à partir de photos pour un site e-commerce africain. IMPORTANT: Lis attentivement le texte/logo visible sur le produit. Voici les marques disponibles dans notre catalogue: ${brandList}. Réponds UNIQUEMENT au format: MARQUE | MODELE | CATEGORIE. Exemple: Tecno | Camon 20 | smartphone. Si tu ne reconnais pas le produit, décris-le. JAMAIS d'explication.`},
+          {role:'user',content:[
+            {type:'text',text:"Identifie précisément ce produit. Lis le texte visible sur l'image (logo, marque, modèle). Réponds au format: MARQUE | MODELE | CATEGORIE"},
+            {type:'image_url',image_url:{url:b64}}
+          ]}
+        ],
+        max_tokens:60,
+        temperature:0
+      })
+    });
+
+    if(!vr.ok){
+      const err=await vr.json().catch(()=>({}));
+      document.getElementById('camLoading').classList.remove('show');
+      toast('Erreur Groq Vision: '+(err.error?.message||vr.status),'error');return;
+    }
+
+    const vd=await vr.json();
+    const raw=vd.choices[0].message.content.trim();
+
+    const parts=raw.split('|').map(s=>s.trim().toLowerCase()).filter(s=>s.length>=2);
+
+    async function trySearch(q){
+      if(!q||q.length<2)return[];
+      const r=await fetch('/search/suggest?q='+encodeURIComponent(q)+'&limit=15');
+      return r.ok?await r.json():[];
+    }
+
+    let results=[];
+    if(parts.length>=2){
+      results=await trySearch(parts[0]+' '+parts[1]);
+      if(!results.length) results=await trySearch(parts[0]);
+    }
+    if(!results.length && parts.length>=1) results=await trySearch(parts[0]);
+    if(!results.length){
+      const cleaned=raw.replace(/[^\w\sàâäéèêëïîôùûüç]/gi,' ').replace(/\s+/g,' ').trim();
+      const words=cleaned.split(' ').filter(w=>w.length>=3).slice(0,3);
+      for(let i=words.length;i>=1&&!results.length;i--){
+        results=await trySearch(words.slice(0,i).join(' '));
+      }
+    }
+    if(!results.length){
+      const r=await fetch(`${API}/search?q=${encodeURIComponent(raw)}&page=1&per_page=12`);
+      if(r.ok){const d=await r.json();results=d.products||[];}
+    }
+
+    const desc=parts.length>=2?(parts[0]+' '+parts[1]).replace(/\b\w/g,c=>c.toUpperCase()):raw;
+
+    document.getElementById('camLoading').classList.remove('show');
+    document.getElementById('camDesc').textContent=desc;
+    document.getElementById('camResult').classList.add('show');
+
+    const grid=document.getElementById('grid');
+    if(results&&results.length){
+      grid.innerHTML=results.map(productCard).join('');
+      document.getElementById('countBar').innerHTML=`<strong>${results.length}</strong> résultat${results.length>1?'s':''} par image`;
+      document.getElementById('pag').innerHTML='';
+      document.getElementById('activeTags').innerHTML='<span class="tag">📷 Recherche par image <button onclick="closeCamResult()">✕</button></span>';
+    }else{
+      grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="icon">📷</div><p>Aucun produit trouvé pour "'+desc+'"</p></div>';
+      document.getElementById('pag').innerHTML='';
+    }
+  }catch(e){
+    document.getElementById('camLoading').classList.remove('show');
+    toast('Erreur: '+e.message,'error');
+  }
+}
+
+function closeCamResult(){
+  document.getElementById('camResult').classList.remove('show');
+  search(1);
+}
+
 async function initB(){
   try{const d=await fetch(API+'/categories').then(r=>r.json());const sel=document.getElementById('fCat');d.categories.forEach(c=>{const o=document.createElement('option');o.value=c.category;o.textContent=fCat(c.category)+' ('+c.nb_products+')';sel.appendChild(o)})}catch(e){}
   const u=new URLSearchParams(location.search);
@@ -103,6 +251,7 @@ async function initB(){
   if(u.get('min_price'))document.getElementById('fMin').value=u.get('min_price');
   if(u.get('max_price'))document.getElementById('fMax').value=u.get('max_price');
   search(1);
+  initAutocomplete('fSearch');
 }
 initB();
 </script>

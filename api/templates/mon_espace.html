@@ -2,42 +2,137 @@
 {% block title %}Mon Espace{% endblock %}
 {% block extra_css %}
 <style>
-.greeting{font-size:.88rem;color:var(--text2);margin-bottom:1.5rem}
-.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem}
-@media(max-width:768px){.stats-row{grid-template-columns:1fr}}
+.space-hero{
+  background:linear-gradient(135deg,var(--dark),var(--dark2) 50%,var(--dark3));
+  color:#fff;padding:2.5rem 2rem 2rem;border-radius:0 0 24px 24px;margin:-1.5rem -1.25rem 2rem;
+  position:relative;overflow:hidden;
+}
+.space-hero::after{content:'';position:absolute;top:-60px;right:-40px;width:250px;height:250px;background:radial-gradient(circle,rgba(246,139,30,.15),transparent 70%);border-radius:50%}
+.hero-row{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;position:relative;z-index:1}
+.hero-avatar{
+  width:64px;height:64px;border-radius:50%;
+  background:linear-gradient(135deg,var(--orange),var(--orange-darker));
+  display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;color:#fff;
+  border:3px solid rgba(255,255,255,.2);flex-shrink:0;
+}
+.hero-info h1{font-size:1.35rem;font-weight:800;margin-bottom:.1rem}
+.hero-info p{font-size:.82rem;color:rgba(255,255,255,.7)}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:.85rem;margin-bottom:1.75rem}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.kpi-row{grid-template-columns:1fr}}
+.kpi{
+  background:#fff;border-radius:14px;padding:1.1rem 1.25rem;border:1px solid var(--border);
+  display:flex;align-items:center;gap:.85rem;transition:.2s;
+}
+.kpi:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.kpi-icon{
+  width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-size:1.2rem;flex-shrink:0;
+}
+.kpi-icon.fav{background:#fef2f2;color:#ef4444}
+.kpi-icon.alert{background:#fffbeb;color:#d97706}
+.kpi-icon.drop{background:#f0fdf4;color:#10b981}
+.kpi-icon.prod{background:#eff6ff;color:#3b82f6}
+.kpi-val{font-size:1.5rem;font-weight:800;line-height:1}
+.kpi-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:600;letter-spacing:.3px}
+
+.tabs{display:flex;gap:4px;background:#fff;border-radius:12px;padding:4px;border:1px solid var(--border);margin-bottom:1.5rem;overflow-x:auto;flex-shrink:0}
+.tabs::-webkit-scrollbar{display:none}
+.tab-btn{
+  padding:.6rem 1.1rem;font-size:.82rem;font-weight:600;color:var(--text2);border:none;
+  border-radius:8px;background:none;cursor:pointer;font-family:inherit;white-space:nowrap;transition:.2s;
+}
+.tab-btn:hover{background:var(--light);color:var(--text)}
+.tab-btn.active{background:linear-gradient(135deg,var(--orange),var(--orange-darker));color:#fff;box-shadow:0 2px 8px rgba(246,139,30,.25)}
+
+.empty-state{
+  text-align:center;padding:3rem 2rem;background:#fff;border:2px dashed var(--border);
+  border-radius:16px;
+}
+.empty-state .icon{font-size:2.5rem;margin-bottom:.75rem}
+.empty-state p{color:var(--text2);font-size:.88rem;max-width:380px;margin:0 auto}
+.empty-state .btn-jumia{margin-top:1rem}
+
 .products-grid{grid-template-columns:repeat(4,1fr)!important}
 @media(max-width:1100px){.products-grid{grid-template-columns:repeat(3,1fr)!important}}
 @media(max-width:768px){.products-grid{grid-template-columns:repeat(2,1fr)!important}}
-.tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:1.5rem;overflow-x:auto}
-.tabs::-webkit-scrollbar{display:none}
-.tab-btn{padding:.7rem 1.2rem;font-size:.85rem;font-weight:600;color:var(--muted);border:none;border-bottom:3px solid transparent;background:none;cursor:pointer;font-family:inherit;white-space:nowrap;transition:.15s;margin-bottom:-2px}
-.tab-btn:hover{color:var(--orange)}
-.tab-btn.active{color:var(--orange);border-bottom-color:var(--orange)}
-.alert-item{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem}
-.alert-item .info{flex:1}
-.alert-item .info .name{font-weight:700;font-size:.9rem}
-.alert-item .info .sub{font-size:.72rem;color:var(--muted)}
-.alert-item .target{font-size:1.05rem;font-weight:800;color:#d97706;white-space:nowrap}
-.drop-item{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;transition:.15s}
-.drop-item:hover{transform:translateX(3px)}
-.drop-item img{width:48px;height:48px;object-fit:contain;border-radius:8px;background:var(--light);flex-shrink:0}
-.drop-item .info{flex:1;min-width:0}
-.drop-item .info .name{font-weight:700;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.drop-item .info .prices{font-size:.78rem;color:var(--muted)}
-.drop-item .info .prices strong{color:var(--green)}
-.drop-item .pct{font-size:1.15rem;font-weight:800;color:var(--green);white-space:nowrap}
+
+.alert-list{display:flex;flex-direction:column;gap:.65rem}
+.alert-card{
+  display:flex;align-items:center;gap:1rem;background:#fff;padding:1rem 1.25rem;
+  border-radius:14px;border:1px solid var(--border);transition:.2s;
+}
+.alert-card:hover{box-shadow:var(--shadow);border-color:var(--orange)}
+.alert-emoji{font-size:1.5rem;flex-shrink:0}
+.alert-info{flex:1;min-width:0}
+.alert-name{font-weight:700;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alert-sub{font-size:.72rem;color:var(--muted);margin-top:.1rem}
+.alert-target{
+  padding:.35rem .85rem;border-radius:20px;font-size:.82rem;font-weight:800;
+  background:#fffbeb;color:#d97706;border:1px solid #fde68a;white-space:nowrap;
+}
+
+.drop-list{display:flex;flex-direction:column;gap:.65rem}
+.drop-card{
+  display:flex;align-items:center;gap:1rem;background:#fff;padding:.85rem 1.15rem;
+  border-radius:14px;border:1px solid var(--border);transition:.2s;text-decoration:none;color:var(--text);
+}
+.drop-card:hover{box-shadow:var(--shadow);border-color:var(--green);transform:translateX(3px)}
+.drop-card img{width:52px;height:52px;object-fit:contain;border-radius:10px;background:var(--light);flex-shrink:0}
+.drop-card .di-info{flex:1;min-width:0}
+.drop-card .di-name{font-weight:700;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drop-card .di-prices{font-size:.78rem;color:var(--muted);margin-top:.15rem}
+.drop-card .di-prices strong{color:var(--green)}
+.drop-badge{
+  padding:.35rem .75rem;border-radius:20px;font-size:.85rem;font-weight:800;
+  background:#f0fdf4;color:var(--green);border:1px solid #bbf7d0;white-space:nowrap;
+}
+
+.pref-section{background:#fff;border-radius:16px;border:1px solid var(--border);padding:1.5rem}
+.pref-title{font-size:1rem;font-weight:800;margin-bottom:.25rem}
+.pref-sub{font-size:.8rem;color:var(--muted);margin-bottom:1rem}
+.pref-label{font-size:.78rem;font-weight:700;color:var(--text2);margin-bottom:.4rem;display:block}
+.pref-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.4rem;max-height:200px;overflow-y:auto;padding:.5rem;border:1px solid var(--border);border-radius:10px;background:var(--light)}
+.pref-item{display:flex;align-items:center;gap:.35rem;font-size:.78rem;padding:.25rem .3rem;border-radius:6px;transition:.1s;cursor:pointer}
+.pref-item:hover{background:#fff}
+.pref-item input{accent-color:var(--orange)}
+.pref-budgets{display:flex;gap:1rem;margin-top:1rem;flex-wrap:wrap}
+.pref-budgets label{font-size:.78rem;color:var(--text2);font-weight:600}
+.pref-budgets input{
+  display:block;margin-top:.3rem;width:155px;padding:.5rem .75rem;border:1.5px solid var(--border);
+  border-radius:10px;font-family:inherit;font-size:.85rem;outline:none;transition:.15s;
+}
+.pref-budgets input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(246,139,30,.1)}
+.pref-sources{display:flex;gap:1rem;margin-top:.85rem;flex-wrap:wrap}
+.pref-sources label{display:flex;align-items:center;gap:.35rem;font-size:.82rem;font-weight:600;cursor:pointer}
+.pref-sources input{accent-color:var(--orange)}
+.pref-actions{display:flex;gap:.65rem;margin-top:1.25rem;flex-wrap:wrap}
+
+.foryou-note{font-size:.78rem;color:var(--muted);margin-bottom:1rem;display:flex;align-items:center;gap:.35rem}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container" style="max-width:100%;padding:1.5rem 2.5rem">
-  <h1 class="section-title">👤 Mon Espace</h1>
-  <p class="greeting" id="greeting">Chargement...</p>
-  <div class="stats-row" id="myStats"></div>
+<div class="container">
+  <div class="space-hero" id="spaceHero">
+    <div class="hero-row">
+      <div class="hero-avatar" id="heroAvatar">?</div>
+      <div class="hero-info">
+        <h1 id="heroName">Mon Espace</h1>
+        <p id="heroSub">Chargement...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-row" id="myKpis"></div>
+
   <div class="tabs">
     <button onclick="showTab('favs',this)" class="tab-btn active">❤️ Favoris</button>
     <button onclick="showTab('alerts',this)" class="tab-btn">🔔 Alertes</button>
     <button onclick="showTab('drops',this)" class="tab-btn">📉 Baisses</button>
+    <button onclick="showTab('prefs',this)" class="tab-btn">⚙️ Preferences</button>
+    <button onclick="showTab('foryou',this)" class="tab-btn">✨ Pour vous</button>
   </div>
   <div id="tabContent"></div>
 </div>
@@ -45,7 +140,7 @@
 
 {% block scripts %}
 <script>
-let myData=null,currentTab='favs';
+let myData=null,currentTab='favs',catList=[];
 function onAuthSuccess(){loadSpace()}
 function showTab(tab,btn){
   currentTab=tab;
@@ -55,51 +150,170 @@ function showTab(tab,btn){
 }
 function renderTab(){
   const c=document.getElementById('tabContent');
-  if(!myData){c.innerHTML='<div class="empty">Chargement...</div>';return}
+  if(!myData){c.innerHTML='<div class="empty-state"><div class="icon">⏳</div><p>Chargement...</p></div>';return}
+
   if(currentTab==='favs'){
-    if(!myData.favorites.length){c.innerHTML='<div class="card empty"><div class="icon">❤️</div><p>Aucun favori. <a href="/boutique" style="color:var(--orange);font-weight:700">Parcourez la boutique</a> et cliquez sur le coeur !</p></div>';return}
+    if(!myData.favorites.length){
+      c.innerHTML='<div class="empty-state"><div class="icon">❤️</div><p>Aucun favori pour le moment.<br>Parcourez la boutique et cliquez sur le coeur pour sauvegarder vos produits preferes !</p><a href="/boutique" class="btn-jumia">Explorer la boutique</a></div>';
+      return;
+    }
     c.innerHTML='<div class="products-grid">'+myData.favorites.map(productCard).join('')+'</div>';
   }
   else if(currentTab==='alerts'){
-    if(!myData.active_alerts.length){c.innerHTML='<div class="card empty"><div class="icon">🔔</div><p>Aucune alerte. Sur un produit, cliquez "Alerte" pour etre notifie par email.</p></div>';return}
-    c.innerHTML=myData.active_alerts.map(a=>`
-      <div class="card alert-item">
-        <div class="info"><div class="name">${a.product_name}</div><div class="sub">Produit #${a.product_id}</div></div>
-        <div class="target">&lt; ${fmt(a.target_price)}</div>
-        <button onclick="delAlert(${a.id})" class="btn-red">Supprimer</button>
-      </div>`).join('');
+    if(!myData.active_alerts.length){
+      c.innerHTML='<div class="empty-state"><div class="icon">🔔</div><p>Aucune alerte active.<br>Sur un produit, cliquez "Alerte" pour etre notifie quand le prix baisse.</p><a href="/boutique" class="btn-jumia">Creer une alerte</a></div>';
+      return;
+    }
+    c.innerHTML='<div class="alert-list">'+myData.active_alerts.map(a=>`
+      <div class="alert-card">
+        <div class="alert-emoji">🔔</div>
+        <div class="alert-info">
+          <div class="alert-name">${a.product_name}</div>
+          <div class="alert-sub">Produit #${a.product_id} · Alerte creee le ${a.created_at?new Date(a.created_at).toLocaleDateString('fr-FR'):'-'}</div>
+        </div>
+        <div class="alert-target">&lt; ${fmt(a.target_price)}</div>
+        <button onclick="delAlert(${a.id})" class="btn-red btn-sm">Supprimer</button>
+      </div>`).join('')+'</div>';
   }
   else if(currentTab==='drops'){
-    if(!myData.weekly_drops.length){c.innerHTML='<div class="card empty"><div class="icon">📉</div><p>Aucune baisse detectee cette semaine.</p></div>';return}
-    c.innerHTML=myData.weekly_drops.map(d=>`
-      <a href="/historique/${d.product_id}" class="card drop-item" style="display:flex;text-decoration:none">
+    if(!myData.weekly_drops.length){
+      c.innerHTML='<div class="empty-state"><div class="icon">📉</div><p>Aucune baisse de prix detectee cette semaine.<br>Revenez plus tard !</p></div>';
+      return;
+    }
+    c.innerHTML='<div class="drop-list">'+myData.weekly_drops.map(d=>`
+      <a href="/historique/${d.product_id}" class="drop-card">
         <img src="${d.image_url||''}" alt="" onerror="this.style.display='none'">
-        <div class="info">
-          <div class="name">${d.name}</div>
-          <div class="prices"><s>${fmt(d.price_before)}</s> → <strong>${fmt(d.price_after)}</strong> · Economie ${fmt(d.savings)}</div>
+        <div class="di-info">
+          <div class="di-name">${d.name}</div>
+          <div class="di-prices"><s>${fmt(d.price_before)}</s> → <strong>${fmt(d.price_after)}</strong> · Economie ${fmt(d.savings)}</div>
         </div>
-        <div class="pct">-${d.drop_pct}%</div>
-      </a>`).join('');
+        <div class="drop-badge">-${d.drop_pct}%</div>
+      </a>`).join('')+'</div>';
   }
+  else if(currentTab==='prefs') renderPrefsForm(c);
+  else if(currentTab==='foryou') renderForYou(c);
 }
+
+async function loadCategories(){
+  if(catList.length)return;
+  try{const r=await fetch(API+'/categories');const d=await r.json();if(r.ok)catList=d.categories||[]}catch(e){}
+}
+
+function renderPrefsForm(c){
+  c.innerHTML='<div class="empty-state"><div class="icon">⏳</div><p>Chargement...</p></div>';
+  loadCategories().then(()=>{
+    authF(API+'/me/preferences').then(r=>r.json()).then(p=>{
+      const selected=new Set(p.categories||[]);
+      const checks=catList.map(x=>`<label class="pref-item"><input type="checkbox" value="${x.category}" ${selected.has(x.category)?'checked':''}> ${fCat(x.category)} <span style="color:var(--muted);font-size:.65rem">(${x.nb_products})</span></label>`).join('');
+      c.innerHTML=`<div class="pref-section">
+        <div class="pref-title">Personnaliser vos recommandations</div>
+        <div class="pref-sub">Cochez jusqu'a 6 categories et indiquez un budget. Promos en premier, puis prix les plus bas.</div>
+        <div class="pref-label">Categories</div>
+        <div class="pref-grid" id="prefCats">${checks||'<p style="font-size:.82rem;color:var(--muted)">Aucune categorie disponible.</p>'}</div>
+        <div class="pref-budgets">
+          <label>Budget min (XOF)<input type="number" id="prefBmin" value="${p.budget_min!=null?p.budget_min:''}" placeholder="25 000"></label>
+          <label>Budget max (XOF)<input type="number" id="prefBmax" value="${p.budget_max!=null?p.budget_max:''}" placeholder="150 000"></label>
+        </div>
+        <div class="pref-sources">
+          <label><input type="checkbox" id="srcJumia" ${!p.sources||p.sources.includes('jumia_ci')?'checked':''}> Jumia CI</label>
+          <label><input type="checkbox" id="srcDjok" ${!p.sources||p.sources.includes('djokstore_ci')?'checked':''}> DjokStore CI</label>
+          <label><input type="checkbox" id="srcCoin" ${!p.sources||p.sources.includes('coinafrique_ci')?'checked':''}> CoinAfrique CI</label>
+        </div>
+        <div class="pref-actions">
+          <button class="btn-jumia" onclick="savePrefs()">Enregistrer</button>
+          <button class="btn-ghost" onclick="clearPrefs()">Effacer</button>
+        </div>
+      </div>`;
+    }).catch(()=>{c.innerHTML='<div class="empty-state"><p>Erreur chargement preferences.</p></div>'});
+  });
+}
+
+async function savePrefs(){
+  const boxes=[...document.querySelectorAll('#prefCats input[type=checkbox]:checked')].map(x=>x.value);
+  const bmin=document.getElementById('prefBmin').value.trim();
+  const bmax=document.getElementById('prefBmax').value.trim();
+  const sj=document.getElementById('srcJumia').checked;
+  const sd=document.getElementById('srcDjok').checked;
+  const sc=document.getElementById('srcCoin').checked;
+  const sources=[];
+  if(sj)sources.push('jumia_ci');
+  if(sd)sources.push('djokstore_ci');
+  if(sc)sources.push('coinafrique_ci');
+  const body={categories:boxes,budget_min:bmin?parseInt(bmin,10):null,budget_max:bmax?parseInt(bmax,10):null,sources:sources.length?sources:null};
+  try{
+    const r=await authF(API+'/me/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!r.ok){toast(d.message||'Erreur','error');return}
+    toast('Preferences enregistrees !','success');
+  }catch(e){toast('Erreur reseau','error')}
+}
+
+async function clearPrefs(){
+  try{
+    const r=await authF(API+'/me/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({categories:[],budget_min:null,budget_max:null,sources:null})});
+    if(!r.ok){toast('Erreur','error');return}
+    toast('Preferences effacees','success');showTab('prefs',document.querySelectorAll('.tab-btn')[3]);
+  }catch(e){toast('Erreur','error')}
+}
+
+async function renderForYou(c){
+  c.innerHTML='<div class="empty-state"><div class="icon">⏳</div><p>Chargement...</p></div>';
+  try{
+    const r=await authF(API+'/me/recommendations?limit=12');
+    const d=await r.json();
+    if(!d.configured){
+      c.innerHTML='<div class="empty-state"><div class="icon">✨</div><p>Configure tes preferences pour recevoir des recommandations personnalisees.</p><button class="btn-jumia" onclick="showTab(\'prefs\',document.querySelectorAll(\'.tab-btn\')[3])">Configurer</button></div>';
+      return;
+    }
+    if(!d.products.length){
+      c.innerHTML='<div class="empty-state"><div class="icon">🔍</div><p>Aucun produit ne correspond a tes criteres pour le moment.</p></div>';
+      return;
+    }
+    c.innerHTML='<div class="foryou-note">✨ Base sur tes categories et budget — promos en premier</div><div class="products-grid">'+d.products.map(productCard).join('')+'</div>';
+  }catch(e){c.innerHTML='<div class="empty-state"><p>Erreur chargement.</p></div>'}
+}
+
 async function delAlert(id){
   try{const r=await authF(API+'/me/alerts/'+id,{method:'DELETE'});if(!r.ok){toast('Erreur','error');return}toast('Alerte supprimee','success');loadSpace()}catch(e){toast('Erreur','error')}
 }
+
 async function loadSpace(){
   if(!token){
-    document.getElementById('greeting').textContent='Connectez-vous pour acceder a votre espace.';
-    document.getElementById('tabContent').innerHTML='<div class="card" style="text-align:center;padding:3rem"><div style="font-size:3rem;margin-bottom:.75rem">🔒</div><p style="color:var(--text2);margin-bottom:1.25rem">Vous devez etre connecte.</p><button onclick="showAuth(\'login\')" class="btn-jumia" style="margin-right:.5rem">Se connecter</button><button onclick="showAuth(\'signup\')" class="btn-ghost">S\'inscrire</button></div>';
+    document.getElementById('spaceHero').style.display='none';
+    document.getElementById('myKpis').style.display='none';
+    document.querySelector('.tabs').style.display='none';
+    document.getElementById('tabContent').innerHTML=`
+      <div class="empty-state" style="padding:4rem 2rem">
+        <div class="icon">🔒</div>
+        <p>Connecte-toi pour acceder a ton espace personnel.</p>
+        <div style="display:flex;gap:.65rem;justify-content:center;margin-top:1.25rem">
+          <button onclick="showAuth('login')" class="btn-jumia">Se connecter</button>
+          <button onclick="showAuth('signup')" class="btn-ghost">S'inscrire</button>
+        </div>
+      </div>`;
     return;
   }
   try{
     const r=await authF(API+'/me/dashboard');const data=await r.json();
-    if(!r.ok){if(r.status===401){token=null;user=null;localStorage.removeItem('jwt');localStorage.removeItem('u');updateNav();document.getElementById('greeting').textContent='Session expiree.';document.getElementById('tabContent').innerHTML='<div class="card" style="text-align:center;padding:3rem"><div style="font-size:3rem;margin-bottom:.75rem">🔒</div><p style="color:var(--text2);margin-bottom:1.25rem">Session expiree.</p><button onclick="showAuth(\'login\')" class="btn-jumia">Se reconnecter</button></div>';return}toast(data.message||'Erreur','error');return}
+    if(!r.ok){
+      if(r.status===401){
+        token=null;user=null;localStorage.removeItem('jwt');localStorage.removeItem('u');updateNav();
+        loadSpace();
+        return;
+      }
+      toast(data.message||'Erreur','error');return;
+    }
     myData=data;
-    document.getElementById('greeting').textContent='Bienvenue '+(user?user.name:'')+' — votre tableau de bord';
-    document.getElementById('myStats').innerHTML=`
-      <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">❤️ Favoris</p><p style="font-size:2rem;font-weight:800" class="gradient-text">${myData.stats.nb_favorites}</p></div>
-      <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">🔔 Alertes actives</p><p style="font-size:2rem;font-weight:800;color:#d97706">${myData.stats.nb_active_alerts}</p></div>
-      <div class="card kpi-card"><p style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:.15rem">📉 Baisses semaine</p><p style="font-size:2rem;font-weight:800;color:var(--green)">${myData.stats.nb_weekly_drops}</p></div>`;
+    const nm=user?user.name:'Utilisateur';
+    document.getElementById('heroAvatar').textContent=nm[0].toUpperCase();
+    document.getElementById('heroName').textContent='Bonjour, '+nm+' !';
+    document.getElementById('heroSub').textContent='Ton tableau de bord personnel';
+
+    document.getElementById('myKpis').innerHTML=`
+      <div class="kpi"><div class="kpi-icon fav">❤️</div><div><div class="kpi-val">${myData.stats.nb_favorites}</div><div class="kpi-lbl">Favoris</div></div></div>
+      <div class="kpi"><div class="kpi-icon alert">🔔</div><div><div class="kpi-val">${myData.stats.nb_active_alerts}</div><div class="kpi-lbl">Alertes actives</div></div></div>
+      <div class="kpi"><div class="kpi-icon drop">📉</div><div><div class="kpi-val">${myData.stats.nb_weekly_drops}</div><div class="kpi-lbl">Baisses semaine</div></div></div>
+      <div class="kpi"><div class="kpi-icon prod">📦</div><div><div class="kpi-val">${(myData.favorites||[]).length+(myData.active_alerts||[]).length}</div><div class="kpi-lbl">Produits suivis</div></div></div>`;
     renderTab();
   }catch(e){toast('Erreur chargement','error')}
 }

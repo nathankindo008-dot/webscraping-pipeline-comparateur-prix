@@ -1,5 +1,5 @@
 # Web scraping
-scrapy==2.11.2
+scrapy>=2.12.0
 itemadapter==0.9.0
 
 # Nettoyage données + export
@@ -9,7 +9,9 @@ openpyxl==3.1.5
 # API
 flask==3.1.0
 flask-sqlalchemy==3.1.1
+flask-jwt-extended==4.7.1
 flasgger==0.9.7.1
+bcrypt==4.3.0
 
 # Base de données
 psycopg2-binary==2.9.10

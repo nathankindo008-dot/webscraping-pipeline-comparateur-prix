@@ -109,6 +109,7 @@ img{max-width:100%}
 .p-card .source-tag{position:absolute;top:.5rem;left:.5rem;padding:2px 8px;border-radius:4px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
 .source-tag.jumia_ci{background:rgba(249,115,22,.9);color:#fff}
 .source-tag.djokstore_ci{background:rgba(139,92,246,.9);color:#fff}
+.source-tag.coinafrique_ci{background:rgba(39,174,96,.9);color:#fff}
 .p-card .discount-tag{position:absolute;top:.5rem;right:.5rem;background:var(--red);color:#fff;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:700}
 .p-card .p-fav{position:absolute;bottom:.5rem;right:.5rem;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;transition:.2s;z-index:2}
 .p-card .p-fav:hover{background:rgba(249,115,22,.8);transform:scale(1.1)}
@@ -281,7 +282,7 @@ img{max-width:100%}
 <div class="page active" id="home">
   <div class="hero">
     <div class="hero-inner">
-      <h1>Comparez les prix<br>sur <span class="hl">Jumia CI</span> et <span class="hl">DjokStore</span></h1>
+      <h1>Comparez les prix<br>sur <span class="hl">Jumia CI</span>, <span class="hl">DjokStore</span> et <span class="hl">CoinAfrique</span></h1>
       <p>Trouvez les meilleurs prix en Cote d'Ivoire. Alertes personnalisees, suivi d'evolution, comparaison multi-sites.</p>
       <div class="hero-search">
         <input type="text" id="heroSearch" placeholder="Que cherchez-vous ? (ex: Samsung, iPhone, ventilateur...)">
@@ -290,6 +291,7 @@ img{max-width:100%}
       <div class="hero-badges">
         <div class="hero-badge jumia"><svg viewBox="0 0 24 24" fill="currentColor" width="16"><circle cx="12" cy="12" r="5"/></svg>Jumia CI</div>
         <div class="hero-badge djok"><svg viewBox="0 0 24 24" fill="currentColor" width="16"><circle cx="12" cy="12" r="5"/></svg>DjokStore CI</div>
+        <div class="hero-badge" style="background:rgba(39,174,96,.15);color:#27ae60"><svg viewBox="0 0 24 24" fill="currentColor" width="16"><circle cx="12" cy="12" r="5"/></svg>CoinAfrique CI</div>
         <div class="hero-badge">&#x1F4E6; 686+ produits</div>
         <div class="hero-badge">&#x1F514; Alertes email</div>
         <div class="hero-badge">&#x1F4C8; Suivi des prix</div>
@@ -320,6 +322,7 @@ img{max-width:100%}
         <option value="">Tous les sites</option>
         <option value="jumia_ci">Jumia CI</option>
         <option value="djokstore_ci">DjokStore CI</option>
+        <option value="coinafrique_ci">CoinAfrique CI</option>
       </select>
       <select id="prodSort" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;border-radius:8px;font-size:.85rem;font-family:inherit">
         <option value="price_asc">Prix croissant</option>
@@ -498,7 +501,7 @@ async function submitAlert(){
 // ── PRODUCT CARD ──
 function pCard(p){
   const src=p.source||'jumia_ci';
-  const srcLabel=src==='djokstore_ci'?'DjokStore':'Jumia';
+  const srcLabel={'djokstore_ci':'DjokStore','coinafrique_ci':'CoinAfrique'}[src]||'Jumia';
   return `<div class="p-card" onclick="viewHist(${p.id})">
     <div class="p-img-wrap">
       <span class="source-tag ${src}">${srcLabel}</span>
@@ -567,7 +570,7 @@ async function doCompare(){
   const d=await r.json();const best=d.best_deal.product_id;
   document.getElementById('cmpResult').innerHTML=`<div class="compare-grid">${d.comparison.map(p=>`
     <div class="cmp-card ${p.id===best?'best':''}">
-      <span class="source-tag ${p.source||'jumia_ci'}" style="display:inline-block;margin-bottom:.5rem">${(p.source||'jumia_ci')==='djokstore_ci'?'DjokStore':'Jumia'}</span>
+      <span class="source-tag ${p.source||'jumia_ci'}" style="display:inline-block;margin-bottom:.5rem">${(p.source||'jumia_ci')==='djokstore_ci'?'DjokStore':(p.source||'jumia_ci')==='coinafrique_ci'?'CoinAfrique':'Jumia'}</span>
       <img src="${p.image_url||''}" style="display:block;width:100px;height:100px;object-fit:contain;border-radius:8px;background:#fff;margin:.5rem auto" onerror="this.style.display='none'">
       <div class="c-name">${p.name}</div><span style="font-size:.75rem;color:var(--muted)">${fCat(p.category)}</span>
       <div class="c-price" style="margin-top:.5rem">${fmt(p.price)}</div>

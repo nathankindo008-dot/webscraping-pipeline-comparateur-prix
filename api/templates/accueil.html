@@ -46,6 +46,12 @@
 .trend-btn:hover:not(.active){border-color:var(--orange);color:var(--orange)}
 .chart-wrap{position:relative;height:360px}
 
+.for-you-block{margin-top:1.25rem}
+.for-you-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+.for-you-top h2{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:.35rem}
+.for-you-top a{font-size:.8rem;font-weight:700;color:var(--orange)}
+.for-you-hint{font-size:.78rem;color:var(--muted);margin-bottom:.75rem}
+
 @media(max-width:1024px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:768px){
   .dash-header-inner{gap:.5rem}
@@ -74,7 +80,7 @@
         <div class="label">Derniere mise a jour</div>
         <div class="time" id="clock">--:--:--</div>
       </div>
-      <button class="dash-scrape" onclick="launchScrape()">🔄 Lancer Scrape</button>
+      <span id="dashScrapeWrap" style="display:none"><button type="button" class="dash-scrape" onclick="launchScrape()">🔄 Lancer Scrape</button></span>
     </div>
   </div>
 </div>
@@ -116,6 +122,7 @@
         <div class="legend">
           <span class="legend-item"><span class="legend-dot" style="background:#F68B1E"></span> Jumia CI</span>
           <span class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span> DjokStore CI</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#27ae60"></span> CoinAfrique CI</span>
         </div>
         <button class="trend-btn active" data-d="7" onclick="setDays(7,this)">7J</button>
         <button class="trend-btn" data-d="30" onclick="setDays(30,this)">30J</button>
@@ -124,6 +131,17 @@
       </div>
     </div>
     <div class="chart-wrap"><canvas id="trendCanvas"></canvas></div>
+  </div>
+
+  <!-- POUR VOUS (connecté + préférences renseignées) -->
+  <div class="chart-section for-you-block" id="forYouWrap" style="display:none">
+    <div class="for-you-top">
+      <h2>✨ Pour vous</h2>
+      <a href="/mon-espace">Personnaliser →</a>
+    </div>
+    <p class="for-you-hint" id="forYouHint"></p>
+    <div class="products-grid" id="forYouGrid"></div>
+    <p id="forYouEmpty" style="display:none;text-align:center;color:var(--muted);padding:1.5rem;font-size:.88rem"></p>
   </div>
 </div>
 {% endblock %}
@@ -137,10 +155,13 @@ function updateClock(){
 updateClock();setInterval(updateClock,1000);
 
 async function launchScrape(){
+  if(!token){toast('Connectez-vous pour lancer un scrape','error');return;}
   toast('Scraping lance...','info');
   try{
-    const r=await fetch('/scrape/async',{method:'POST'});
-    const d=await r.json();
+    const r=await authF('/scrape/async',{method:'POST'});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===401||r.status===422){toast('Session expiree ou invalide — reconnectez-vous','error');return;}
+    if(r.status===403){toast(d.message||'Acces administrateur requis','error');return;}
     if(r.ok)toast('Pipeline lance ! ID: '+d.task_id,'success');
     else toast(d.message||'Erreur','error');
   }catch(e){toast('Erreur reseau','error')}
@@ -159,19 +180,23 @@ async function loadTrends(){
     const d=await fetch('/stats/price-trends?days='+currentDays).then(r=>r.json());
     const jumia=d.trends['jumia_ci']||[];
     const djok=d.trends['djokstore_ci']||[];
-    const allDates=[...new Set([...jumia.map(x=>x.date),...djok.map(x=>x.date)])].sort();
+    const coin=d.trends['coinafrique_ci']||[];
+    const allDates=[...new Set([...jumia.map(x=>x.date),...djok.map(x=>x.date),...coin.map(x=>x.date)])].sort();
     const jMap=Object.fromEntries(jumia.map(x=>[x.date,x.avg_price]));
     const dMap=Object.fromEntries(djok.map(x=>[x.date,x.avg_price]));
+    const cMap=Object.fromEntries(coin.map(x=>[x.date,x.avg_price]));
     const labels=allDates.map(d=>{const p=d.split('-');return p[2]+'/'+p[1]});
     const jData=allDates.map(d=>jMap[d]||null);
     const dData=allDates.map(d=>dMap[d]||null);
+    const cData=allDates.map(d=>cMap[d]||null);
 
     if(trendChart)trendChart.destroy();
     trendChart=new Chart(document.getElementById('trendCanvas'),{
       type:'line',
       data:{labels,datasets:[
         {label:'Jumia CI',data:jData,borderColor:'#F68B1E',backgroundColor:'rgba(246,139,30,.1)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#F68B1E',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7},
-        {label:'DjokStore CI',data:dData,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.1)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#8b5cf6',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7}
+        {label:'DjokStore CI',data:dData,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.1)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#8b5cf6',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7},
+        {label:'CoinAfrique CI',data:cData,borderColor:'#27ae60',backgroundColor:'rgba(39,174,96,.1)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#27ae60',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7}
       ]},
       options:{
         responsive:true,maintainAspectRatio:false,
@@ -204,5 +229,43 @@ async function loadKPIs(){
 
 loadKPIs();
 loadTrends();
+
+async function loadForYouHome(){
+  const wrap=document.getElementById('forYouWrap');
+  const grid=document.getElementById('forYouGrid');
+  const empty=document.getElementById('forYouEmpty');
+  const hint=document.getElementById('forYouHint');
+  if(!wrap||!token){if(wrap)wrap.style.display='none';return;}
+  try{
+    const r=await authF(API+'/me/recommendations?limit=8');
+    const d=await r.json();
+    if(!r.ok||!d.configured){wrap.style.display='none';return;}
+    wrap.style.display='block';
+    hint.textContent='Suggestions basées sur vos catégories et votre budget (promotions en premier).';
+    if(!d.products.length){
+      grid.innerHTML='';
+      empty.style.display='block';
+      empty.textContent='Aucun produit ne correspond pour le moment. Ajustez vos préférences dans Mon espace.';
+      return;
+    }
+    empty.style.display='none';
+    await loadFavIds();
+    grid.innerHTML=d.products.map(productCard).join('');
+  }catch(e){wrap.style.display='none';}
+}
+loadForYouHome();
+
+window.getPageIntroSteps=function(){
+  const out=[];
+  const dh=document.querySelector('.dash-header');
+  if(dh)out.push({element:dh,intro:'Le <strong>tableau de bord</strong> resume l activite : horloge locale et, si vous etes admin, lancement du <strong>scraping</strong>.'});
+  const kpi=document.querySelector('.dash-body .kpi-row');
+  if(kpi)out.push({element:kpi,intro:'Les <strong>indicateurs</strong> comptent les produits, prix moyen, categories, promotions… mis a jour apres chaque scrape.'});
+  const chart=document.querySelector('.dash-body .chart-section');
+  if(chart)out.push({element:chart,intro:'Le <strong>graphique</strong> compare l evolution du prix moyen Jumia vs DjokStore. Changez la periode (7J, 30J…).'});
+  const fy=document.getElementById('forYouWrap');
+  if(fy&&fy.style.display!=='none'&&window.getComputedStyle(fy).display!=='none')out.push({element:fy,intro:'La section <strong>Pour vous</strong> apparait quand vos preferences sont renseignees dans Mon espace.'});
+  return out.filter(s=>s.element);
+};
 </script>
 {% endblock %}
