@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block extra_css %}
+<style>
+.dash-header{background:linear-gradient(135deg,#E07C15 0%,#F68B1E 40%,#FFB84D 100%);padding:1.5rem 0;position:relative;overflow:hidden}
+.dash-header::before{content:'';position:absolute;top:-50%;right:-5%;width:400px;height:400px;background:radial-gradient(circle,rgba(255,255,255,.08),transparent 70%);pointer-events:none}
+.dash-header-inner{max-width:1300px;margin:0 auto;padding:0 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.dash-logo{display:flex;align-items:center;gap:.75rem}
+.dash-logo .icon{width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;backdrop-filter:blur(4px)}
+.dash-logo h1{font-size:1.4rem;font-weight:800;color:#fff}
+.dash-logo p{font-size:.72rem;color:rgba(255,255,255,.8);display:flex;align-items:center;gap:4px}
+.dash-logo .dot{width:6px;height:6px;background:#34d399;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.dash-right{margin-left:auto;display:flex;align-items:center;gap:.75rem}
+.dash-clock{background:rgba(255,255,255,.15);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:.5rem 1rem;text-align:center}
+.dash-clock .label{font-size:.55rem;color:rgba(255,255,255,.7);text-transform:uppercase;font-weight:700;letter-spacing:.5px}
+.dash-clock .time{font-size:1.2rem;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+.dash-scrape{display:flex;align-items:center;gap:.4rem;background:rgba(255,255,255,.2);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:.55rem 1.1rem;color:#fff;font-size:.82rem;font-weight:700;cursor:pointer;transition:.15s;font-family:inherit}
+.dash-scrape:hover{background:rgba(255,255,255,.3)}
+
+.dash-body{max-width:1300px;margin:0 auto;padding:1.5rem 1.25rem}
+
+.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:.75rem;margin-bottom:1.5rem}
+.kpi{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);padding:1rem 1.1rem;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.c1::before{background:var(--red)}.kpi.c2::before{background:var(--green)}
+.kpi.c3::before{background:var(--purple)}.kpi.c4::before{background:var(--yellow)}
+.kpi.c5::before{background:var(--red)}.kpi.c6::before{background:var(--orange)}
+.kpi .kpi-label{font-size:.6rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.6px;display:flex;align-items:center;gap:.3rem;margin-bottom:.35rem}
+.kpi .kpi-val{font-size:1.8rem;font-weight:900;line-height:1.1}
+.kpi .kpi-val.red{color:var(--red)}.kpi .kpi-val.green{color:var(--green)}
+.kpi .kpi-val.purple{color:var(--purple)}.kpi .kpi-val.yellow{color:#ca8a04}
+.kpi .kpi-val.orange{color:var(--orange)}.kpi .kpi-val.blue{color:var(--blue)}
+.kpi .kpi-unit{font-size:.85rem;font-weight:600;margin-left:2px}
+
+.chart-section{background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow);border:1px solid var(--border);padding:1.25rem 1.5rem}
+.chart-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+.chart-title{display:flex;align-items:center;gap:.4rem;font-size:1rem;font-weight:800}
+.chart-controls{display:flex;align-items:center;gap:.5rem}
+.chart-controls .legend{display:flex;gap:.75rem}
+.chart-controls .legend-item{display:flex;align-items:center;gap:.3rem;font-size:.75rem;font-weight:600;color:var(--text2)}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.trend-btn{padding:.35rem .85rem;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+.trend-btn.active{background:var(--orange);color:#fff;border:none}
+.trend-btn:not(.active){background:var(--light);border:1px solid var(--border);color:var(--text2)}
+.trend-btn:hover:not(.active){border-color:var(--orange);color:var(--orange)}
+.chart-wrap{position:relative;height:360px}
+
+.for-you-block{margin-top:1.25rem}
+.for-you-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+.for-you-top h2{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:.35rem}
+.for-you-top a{font-size:.8rem;font-weight:700;color:var(--orange)}
+.for-you-hint{font-size:.78rem;color:var(--muted);margin-bottom:.75rem}
+
+@media(max-width:1024px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:768px){
+  .dash-header-inner{gap:.5rem}
+  .dash-logo h1{font-size:1.1rem}
+  .dash-right{margin-left:0;width:100%;justify-content:space-between}
+  .kpi-row{grid-template-columns:repeat(2,1fr);gap:.5rem}
+  .kpi .kpi-val{font-size:1.4rem}
+  .chart-wrap{height:260px}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- DASHBOARD HEADER -->
+<div class="dash-header">
+  <div class="dash-header-inner">
+    <div class="dash-logo">
+      <div class="icon">🛒</div>
+      <div>
+        <h1>Jumia CI Analytics</h1>
+        <p><span class="dot"></span> Dashboard Temps Reel — Comparateur</p>
+      </div>
+    </div>
+    <div class="dash-right">
+      <div class="dash-clock">
+        <div class="label">Derniere mise a jour</div>
+        <div class="time" id="clock">--:--:--</div>
+      </div>
+      <span id="dashScrapeWrap" style="display:none"><button type="button" class="dash-scrape" onclick="launchScrape()">🔄 Lancer Scrape</button></span>
+    </div>
+  </div>
+</div>
+
+<div class="dash-body">
+  <!-- KPI CARDS -->
+  <div class="kpi-row">
+    <div class="kpi c1">
+      <div class="kpi-label">📦 Produits Total</div>
+      <div class="kpi-val red" id="kProd">0</div>
+    </div>
+    <div class="kpi c2">
+      <div class="kpi-label">💰 Prix Moyen</div>
+      <div class="kpi-val green" id="kAvg">0<span class="kpi-unit">F</span></div>
+    </div>
+    <div class="kpi c3">
+      <div class="kpi-label">📁 Categories</div>
+      <div class="kpi-val purple" id="kCats">0</div>
+    </div>
+    <div class="kpi c4">
+      <div class="kpi-label">📉 Prix Min</div>
+      <div class="kpi-val yellow" id="kMin">0<span class="kpi-unit">F</span></div>
+    </div>
+    <div class="kpi c5">
+      <div class="kpi-label">📈 Prix Max</div>
+      <div class="kpi-val red" id="kMax">0<span class="kpi-unit">F</span></div>
+    </div>
+    <div class="kpi c6">
+      <div class="kpi-label">🏷️ Promotions</div>
+      <div class="kpi-val orange" id="kPromos">0</div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-section">
+    <div class="chart-top">
+      <div class="chart-title">📊 Evolution Prix Moyen</div>
+      <div class="chart-controls">
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#F68B1E"></span> Jumia CI</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span> DjokStore CI</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#27ae60"></span> CoinAfrique CI</span>
+        </div>
+        <button class="trend-btn active" data-d="7" onclick="setDays(7,this)">7J</button>
+        <button class="trend-btn" data-d="30" onclick="setDays(30,this)">30J</button>
+        <button class="trend-btn" data-d="60" onclick="setDays(60,this)">60J</button>
+        <button class="trend-btn" data-d="90" onclick="setDays(90,this)">90J</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="trendCanvas"></canvas></div>
+  </div>
+
+  <!-- POUR VOUS (connecté + préférences renseignées) -->
+  <div class="chart-section for-you-block" id="forYouWrap" style="display:none">
+    <div class="for-you-top">
+      <h2>✨ Pour vous</h2>
+      <a href="/mon-espace">Personnaliser →</a>
+    </div>
+    <p class="for-you-hint" id="forYouHint"></p>
+    <div class="products-grid" id="forYouGrid"></div>
+    <p id="forYouEmpty" style="display:none;text-align:center;color:var(--muted);padding:1.5rem;font-size:.88rem"></p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateClock(){
+  const now=new Date();
+  document.getElementById('clock').textContent=now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+updateClock();setInterval(updateClock,1000);
+
+async function launchScrape(){
+  if(!token){toast('Connectez-vous pour lancer un scrape','error');return;}
+  toast('Scraping lance...','info');
+  try{
+    const r=await authF('/scrape/async',{method:'POST'});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===401||r.status===422){toast('Session expiree ou invalide — reconnectez-vous','error');return;}
+    if(r.status===403){toast(d.message||'Acces administrateur requis','error');return;}
+    if(r.ok)toast('Pipeline lance ! ID: '+d.task_id,'success');
+    else toast(d.message||'Erreur','error');
+  }catch(e){toast('Erreur reseau','error')}
+}
+
+let trendChart=null,currentDays=7;
+function setDays(d,btn){
+  currentDays=d;
+  document.querySelectorAll('.trend-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadTrends();
+}
+
+async function loadTrends(){
+  try{
+    const d=await fetch('/stats/price-trends?days='+currentDays).then(r=>r.json());
+    const jumia=d.trends['jumia_ci']||[];
+    const djok=d.trends['djokstore_ci']||[];
+    const coin=d.trends['coinafrique_ci']||[];
+    const allDates=[...new Set([...jumia.map(x=>x.date),...djok.map(x=>x.date),...coin.map(x=>x.date)])].sort();
+    const jMap=Object.fromEntries(jumia.map(x=>[x.date,x.avg_price]));
+    const dMap=Object.fromEntries(djok.map(x=>[x.date,x.avg_price]));
+    const cMap=Object.fromEntries(coin.map(x=>[x.date,x.avg_price]));
+    const labels=allDates.map(d=>{const p=d.split('-');return p[2]+'/'+p[1]});
+    const jData=allDates.map(d=>jMap[d]||null);
+    const dData=allDates.map(d=>dMap[d]||null);
+    const cData=allDates.map(d=>cMap[d]||null);
+
+    if(trendChart)trendChart.destroy();
+    trendChart=new Chart(document.getElementById('trendCanvas'),{
+      type:'line',
+      data:{labels,datasets:[
+        {label:'Jumia CI',data:jData,borderColor:'#F68B1E',backgroundColor:'rgba(246,139,30,.1)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#F68B1E',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7},
+        {label:'DjokStore CI',data:dData,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.1)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#8b5cf6',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7},
+        {label:'CoinAfrique CI',data:cData,borderColor:'#27ae60',backgroundColor:'rgba(39,174,96,.1)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#27ae60',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7}
+      ]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{display:false},
+          tooltip:{backgroundColor:'rgba(26,26,46,.95)',titleFont:{size:13,weight:'bold'},bodyFont:{size:12},padding:14,cornerRadius:10,displayColors:true,boxPadding:4,
+            callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)}}
+        },
+        scales:{
+          x:{grid:{display:false},ticks:{font:{size:11,weight:'500'},color:'#9ca3af',maxRotation:45}},
+          y:{beginAtZero:false,grid:{color:'rgba(0,0,0,.04)',drawBorder:false},ticks:{callback:v=>Math.round(v/1000)+'k F',font:{size:11,weight:'600'},color:'#6b7280'}}
+        }
+      }
+    });
+  }catch(e){console.error('Trends error:',e)}
+}
+
+async function loadKPIs(){
+  try{
+    const d=await fetch('/stats/overview').then(r=>r.json());
+    document.getElementById('kProd').textContent=d.total_products.toLocaleString('fr-FR');
+    document.getElementById('kAvg').innerHTML=d.avg_price.toLocaleString('fr-FR')+'<span class="kpi-unit">F</span>';
+    document.getElementById('kCats').textContent=d.nb_categories;
+    document.getElementById('kMin').innerHTML=d.min_price.toLocaleString('fr-FR')+'<span class="kpi-unit">F</span>';
+    document.getElementById('kMax').innerHTML=d.max_price.toLocaleString('fr-FR')+'<span class="kpi-unit">F</span>';
+    document.getElementById('kPromos').textContent=d.nb_promotions;
+  }catch(e){console.error('KPI error:',e)}
+}
+
+loadKPIs();
+loadTrends();
+
+async function loadForYouHome(){
+  const wrap=document.getElementById('forYouWrap');
+  const grid=document.getElementById('forYouGrid');
+  const empty=document.getElementById('forYouEmpty');
+  const hint=document.getElementById('forYouHint');
+  if(!wrap||!token){if(wrap)wrap.style.display='none';return;}
+  try{
+    const r=await authF(API+'/me/recommendations?limit=8');
+    const d=await r.json();
+    if(!r.ok||!d.configured){wrap.style.display='none';return;}
+    wrap.style.display='block';
+    hint.textContent='Suggestions basées sur vos catégories et votre budget (promotions en premier).';
+    if(!d.products.length){
+      grid.innerHTML='';
+      empty.style.display='block';
+      empty.textContent='Aucun produit ne correspond pour le moment. Ajustez vos préférences dans Mon espace.';
+      return;
+    }
+    empty.style.display='none';
+    await loadFavIds();
+    grid.innerHTML=d.products.map(productCard).join('');
+  }catch(e){wrap.style.display='none';}
+}
+loadForYouHome();
+
+window.getPageIntroSteps=function(){
+  const out=[];
+  const dh=document.querySelector('.dash-header');
+  if(dh)out.push({element:dh,intro:'Le <strong>tableau de bord</strong> resume l activite : horloge locale et, si vous etes admin, lancement du <strong>scraping</strong>.'});
+  const kpi=document.querySelector('.dash-body .kpi-row');
+  if(kpi)out.push({element:kpi,intro:'Les <strong>indicateurs</strong> comptent les produits, prix moyen, categories, promotions… mis a jour apres chaque scrape.'});
+  const chart=document.querySelector('.dash-body .chart-section');
+  if(chart)out.push({element:chart,intro:'Le <strong>graphique</strong> compare l evolution du prix moyen Jumia vs DjokStore. Changez la periode (7J, 30J…).'});
+  const fy=document.getElementById('forYouWrap');
+  if(fy&&fy.style.display!=='none'&&window.getComputedStyle(fy).display!=='none')out.push({element:fy,intro:'La section <strong>Pour vous</strong> apparait quand vos preferences sont renseignees dans Mon espace.'});
+  return out.filter(s=>s.element);
+};
+</script>
+{% endblock %}

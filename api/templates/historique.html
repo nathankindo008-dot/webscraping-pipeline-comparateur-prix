@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Historique des prix{% endblock %}
+{% block extra_css %}
+<style>
+.hist-form{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:2rem}
+.hist-form input{padding:.75rem 1rem;border:2px solid var(--border);border-radius:var(--radius);font-size:.88rem;outline:none;font-family:inherit;width:180px;transition:.15s}
+.hist-form input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(246,139,30,.1)}
+.prod-header{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.prod-header img{width:80px;height:80px;object-fit:contain;border-radius:var(--radius);background:var(--light);flex-shrink:0}
+.prod-header .info{flex:1;min-width:200px}
+.prod-header .info .meta{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.3rem}
+.prod-header .info .meta .badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:.6rem;font-weight:800;text-transform:uppercase;color:#fff}
+.prod-header .info .meta .badge.jumia{background:var(--orange)}.prod-header .info .meta .badge.djok{background:var(--purple)}
+.prod-header .info .meta .tag{font-size:.72rem;background:var(--light);border:1px solid var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-weight:600}
+.var-badge{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:5px}
+.var-badge.up{background:#fef2f2;color:var(--red)}.var-badge.down{background:#f0fdf4;color:var(--green)}.var-badge.flat{background:var(--light);color:var(--muted)}
+.prod-header .info h2{font-size:1.15rem;font-weight:800}
+.prod-header .actions{display:flex;gap:.4rem;flex-wrap:wrap}
+.chart-wrap{position:relative;height:380px}
+.insight-card{display:flex;align-items:center;gap:1rem;padding:1rem 1.25rem;border-radius:var(--radius);border:2px solid var(--border);margin-bottom:1.25rem;flex-wrap:wrap}
+.insight-card.green{border-color:#22c55e;background:#f0fdf4}.insight-card.orange{border-color:#f59e0b;background:#fffbeb}.insight-card.red{border-color:#ef4444;background:#fef2f2}
+.insight-icon{font-size:1.8rem;flex-shrink:0}
+.insight-main{flex:1;min-width:180px}
+.insight-label{font-size:1rem;font-weight:800}
+.insight-sub{font-size:.78rem;color:var(--text2);margin-top:.15rem}
+.insight-stats{display:flex;gap:1rem;flex-wrap:wrap}
+.insight-stat{text-align:center}
+.insight-stat .val{font-size:.95rem;font-weight:800}
+.insight-stat .lbl{font-size:.65rem;color:var(--muted);text-transform:uppercase}
+.insight-bar{width:100%;height:8px;background:#e5e7eb;border-radius:4px;margin-top:.6rem;position:relative;max-width:300px}
+.insight-bar-fill{height:100%;border-radius:4px;transition:width .5s}
+.insight-bar-dot{position:absolute;top:-4px;width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2);transform:translateX(-50%);transition:left .5s}
+.match-section{margin-top:1.25rem}
+.match-section h3{font-size:.95rem;font-weight:800;margin-bottom:.65rem}
+.match-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.65rem}
+.match-item{display:flex;gap:.55rem;background:#fff;border:1px solid var(--border);border-radius:12px;padding:.6rem;cursor:pointer;transition:.15s;text-decoration:none;color:var(--text)}
+.match-item:hover{border-color:var(--orange);box-shadow:0 2px 12px rgba(246,139,30,.12)}
+.match-item img{width:50px;height:50px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--light)}
+.match-item .mi-info{flex:1;min-width:0}
+.match-item .mi-name{font-size:.75rem;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.match-item .mi-price{font-size:.85rem;font-weight:800;color:var(--orange);margin-top:.2rem}
+.match-item .mi-meta{font-size:.6rem;color:var(--muted)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:960px">
+  <h1 class="section-title">📈 Historique des prix</h1>
+  <p class="section-sub">Suivez l'evolution du prix d'un produit</p>
+  <form class="hist-form" onsubmit="event.preventDefault();loadH()">
+    <input type="number" id="hId" placeholder="ID du produit" value="{{ product_id or '' }}">
+    <button type="submit" class="btn-jumia">Voir l'historique</button>
+    <a href="/boutique" class="btn-ghost">Parcourir les produits</a>
+  </form>
+  <div id="result"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let chart=null;
+async function loadH(id){
+  if(!id)id=document.getElementById('hId').value;
+  if(!id){toast('Entrez un ID','warning');return}
+  document.getElementById('hId').value=id;
+  try{
+    const r=await fetch(`${API}/products/${id}/history?limit=60`);
+    if(!r.ok){const e=await r.json();toast(e.message||'Produit introuvable','error');return}
+    const d=await r.json();
+    if(!d.history||d.history.length===0){document.getElementById('result').innerHTML='<div class="card empty"><div class="icon">📉</div><p>Aucun historique de prix pour ce produit.</p></div>';return}
+    const v=d.price_variation_pct,vC=v>0?'up':v<0?'down':'flat',vS=v>0?'+':'';
+    const latest=d.history[0];
+    const s=d.source||'jumia_ci',sl={'djokstore_ci':'DjokStore','coinafrique_ci':'CoinAfrique'}[s]||'Jumia',sc={'djokstore_ci':'djok','coinafrique_ci':'coin'}[s]||'jumia';
+
+    document.getElementById('result').innerHTML=`
+      <div class="card" style="margin-bottom:1.25rem">
+        <div class="prod-header">
+          <img src="${d.image_url||''}" alt="" onerror="this.style.display='none'">
+          <div class="info">
+            <div class="meta">
+              <span class="badge ${sc}">${sl}</span>
+              <span class="tag">${fCat(d.category)}</span>
+              <span class="tag">${d.nb_snapshots} snapshot(s)</span>
+              ${v!==null?`<span class="var-badge ${vC}">${vS}${v}%</span>`:''}
+            </div>
+            <h2>${d.name}</h2>
+            ${latest?`<div class="gradient-text" style="font-size:1.6rem;font-weight:800;margin-top:.3rem">${fmt(latest.price)}</div>`:''}
+          </div>
+          <div class="actions">
+            <a href="${d.product_url}" target="_blank" class="btn-ghost btn-sm">Voir sur le site →</a>
+            <button onclick="openAlert(${id},'${esc(d.name)}')" class="btn-jumia btn-sm">🔔 Alerte</button>
+            <button onclick="toggleFav(${id})" class="btn-ghost btn-sm">❤️ Favori</button>
+          </div>
+        </div>
+      </div>
+      <div class="card"><div class="chart-wrap"><canvas id="hCanvas"></canvas></div></div>`;
+
+    fetchInsight(id);
+    fetchMatches(id);
+    const labels=d.history.map(h=>new Date(h.scraped_at).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})).reverse();
+    const prices=d.history.map(h=>h.price).reverse();
+    const oldP=d.history.map(h=>h.old_price).reverse();
+    if(chart)chart.destroy();
+    chart=new Chart(document.getElementById('hCanvas'),{type:'line',data:{labels,datasets:[
+      {label:'Prix actuel',data:prices,borderColor:'#F68B1E',backgroundColor:'rgba(246,139,30,.08)',fill:true,tension:.4,pointRadius:5,borderWidth:3,pointBackgroundColor:'#F68B1E',pointBorderColor:'#fff',pointBorderWidth:2},
+      {label:'Ancien prix',data:oldP,borderColor:'#d1d5db',backgroundColor:'transparent',borderDash:[5,5],tension:.4,pointRadius:2,borderWidth:1.5}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:13,weight:'bold'}}}},scales:{
+      x:{grid:{display:false},ticks:{font:{size:11},maxRotation:45}},
+      y:{beginAtZero:false,grid:{color:'rgba(0,0,0,.05)'},ticks:{callback:v=>fmt(v),font:{weight:'bold'}}}
+    }}});
+  }catch(e){toast('Erreur','error')}
+}
+async function fetchMatches(pid){
+  try{
+    const r=await fetch(`${API}/products/${pid}/matches`);
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.matches||!d.matches.length)return;
+    const noImg="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 50 50%22><rect fill=%22%23f3f4f6%22 width=%2250%22 height=%2250%22/><text x=%2225%22 y=%2229%22 text-anchor=%22middle%22 font-size=%228%22 fill=%22%239ca3af%22>Photo</text></svg>";
+    let html='<div class="match-section card"><h3>🔄 Meme produit sur une autre source</h3><div class="match-grid">';
+    d.matches.forEach(function(m){
+      const disc=m.discount_pct?`<span style="color:#ef4444;font-weight:700;font-size:.7rem"> -${Math.round(m.discount_pct)}%</span>`:'';
+      html+=`<a class="match-item" href="/historique/${m.id}">
+        <img src="${m.image_url||noImg}" onerror="this.src='${noImg}'" alt="">
+        <div class="mi-info">
+          <div class="mi-name">${m.name}</div>
+          <div class="mi-price">${fmt(m.price)}${disc}</div>
+          <div class="mi-meta">${m.source_label} · ${Math.round(m.similarity)}% match</div>
+        </div></a>`;
+    });
+    html+='</div></div>';
+    const result=document.getElementById('result');
+    result.insertAdjacentHTML('beforeend',html);
+  }catch(e){}
+}
+
+async function fetchInsight(pid){
+  try{
+    const r=await fetch(`${API}/products/${pid}/price-insight`);
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.insight)return;
+    const i=d.insight;
+    const icons={green:'🟢',orange:'🟡',red:'🔴'};
+    const trendTxt={baisse:'📉 En baisse',hausse:'📈 En hausse',stable:'➡️ Stable'};
+    const barColor={green:'#22c55e',orange:'#f59e0b',red:'#ef4444'};
+    const el=document.createElement('div');
+    el.innerHTML=`<div class="insight-card ${i.color}">
+      <div class="insight-icon">${icons[i.color]||'🟡'}</div>
+      <div class="insight-main">
+        <div class="insight-label">${i.label}</div>
+        <div class="insight-sub">${trendTxt[i.trend]||'Stable'} · ${i.nb_snapshots} releves</div>
+        <div class="insight-bar"><div class="insight-bar-fill" style="width:${i.position_pct}%;background:${barColor[i.color]}"></div><div class="insight-bar-dot" style="left:${i.position_pct}%;background:${barColor[i.color]}"></div></div>
+      </div>
+      <div class="insight-stats">
+        <div class="insight-stat"><div class="val">${fmt(i.price_min)}</div><div class="lbl">Min</div></div>
+        <div class="insight-stat"><div class="val">${fmt(i.avg_30d)}</div><div class="lbl">Moy 30j</div></div>
+        <div class="insight-stat"><div class="val">${fmt(i.price_max)}</div><div class="lbl">Max</div></div>
+      </div>
+    </div>`;
+    const result=document.getElementById('result');
+    const cards=result.querySelectorAll('.card');
+    if(cards.length>=2)result.insertBefore(el.firstChild,cards[1]);
+    else result.appendChild(el.firstChild);
+  }catch(e){}
+}
+{% if product_id %}loadH({{ product_id }});{% endif %}
+</script>
+{% endblock %}
