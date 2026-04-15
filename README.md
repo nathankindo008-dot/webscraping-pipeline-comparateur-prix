@@ -7,10 +7,12 @@
 ![Scrapy](https://img.shields.io/badge/Scraping-Scrapy-green)
 ![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2016-336791)
 ![Celery](https://img.shields.io/badge/Async-Celery%20%2B%20Redis-red)
+![Airflow](https://img.shields.io/badge/Orchestration-Airflow%202.9-017CEE)
 ![Prometheus](https://img.shields.io/badge/Monitoring-Prometheus%20%2B%20Grafana-orange)
+![Tests](https://img.shields.io/badge/Tests-42%20passing-brightgreen)
 
 > Pipeline complet de web scraping, nettoyage, stockage et exposition des prix
-> de produits Jumia Côte d'Ivoire — **ENSEA AS Data Science**
+> **multi-sources** (Jumia CI, DjokStore CI, CoinAfrique CI) — **ENSEA AS Data Science**
 
 ---
 
@@ -27,27 +29,41 @@
 
 ## Description du projet
 
-Ce projet implémente un **pipeline de production complet** pour la collecte et l'analyse des prix sur Jumia Côte d'Ivoire :
+Ce projet implémente un **pipeline de production complet** pour la collecte et l'analyse des prix sur 3 sources ivoiriennes :
 
-1. **Scraping automatisé** de 17 catégories de produits (max 500 items)
-2. **Nettoyage intelligent** avec détection des prix aberrants par catégorie
-3. **Stockage** dans PostgreSQL avec historique des prix
-4. **API REST** complète avec pagination, recherche, filtres et comparaison
-5. **Tâches planifiées** via Celery Beat (scraping quotidien à 2h)
-6. **Monitoring** avec Prometheus + Grafana (dashboard préconfiguré)
-7. **Export** des données en CSV, Excel et JSON
+1. **Scraping multi-sources** :
+   - **Jumia CI** (17 catégories, max 500 items, via FlareSolverr pour contourner Cloudflare)
+   - **DjokStore CI** (boutique e-commerce locale)
+   - **CoinAfrique CI** (petites annonces neuf + occasion)
+2. **Nettoyage intelligent** (pandas) avec détection des prix aberrants par catégorie
+3. **Stockage** PostgreSQL avec **historique des prix** (`price_history`) et **matching cross-source** (produits identiques entre sources)
+4. **API REST** complète avec pagination, recherche, filtres, comparaison, auth JWT
+5. **Orchestration hybride** :
+   - **Airflow** orchestre les workflows complexes (pipeline quotidien, digest hebdo)
+   - **Celery Beat** gère la veille temps-réel (chutes majeures toutes les 5 min)
+6. **Monitoring** : Prometheus + Grafana (dashboard préconfiguré)
+7. **Chatbot IA** (JumiBot) basé sur Llama 3.3 70B via Groq
+8. **Alertes email** de baisse de prix + digest hebdomadaire
+9. **Export** des données en CSV, Excel et JSON
 
 ---
 
 ## Architecture
 
 ```
-Jumia CI ──▶ Scrapy ──▶ pandas (nettoyage) ──▶ PostgreSQL
-                 ▲                                    │
-           Celery Beat                           API Flask
-           (planification)                     (REST + Swagger)
-                                                      │
-                                               Prometheus ──▶ Grafana
+ Jumia CI ──▶ FlareSolverr ──┐
+ DjokStore CI ───────────────┤──▶ Scrapy ──▶ pandas ──▶ PostgreSQL
+ CoinAfrique CI ─────────────┘        (nettoyage)           │
+                                                            │
+         ┌───────────────────────────────────────┐          │
+         │       ORCHESTRATION                   │          ▼
+         │  Airflow (pipelines)  +  Beat (5min)  │   ┌──────────────┐
+         └──────────────┬────────────────────────┘   │  API Flask   │
+                        │                            │ (REST+Swagger│
+                        ▼                            │   + Chatbot) │
+                 Celery Worker                       └──────┬───────┘
+                 (Redis broker)                             │
+                                                   Prometheus ──▶ Grafana
 ```
 
 > Voir [ARCHITECTURE.md](./ARCHITECTURE.md) pour le détail complet.
@@ -58,14 +74,18 @@ Jumia CI ──▶ Scrapy ──▶ pandas (nettoyage) ──▶ PostgreSQL
 
 | Composant | Technologie | Version |
 |-----------|-------------|---------|
-| Scraping | Scrapy | 2.11 |
-| Nettoyage | pandas | 2.2 |
-| API | Flask + SQLAlchemy + Flasgger | 3.1 |
+| Scraping | Scrapy | 2.12+ |
+| Anti-Cloudflare | FlareSolverr | latest |
+| Nettoyage | pandas | 2.2.3 |
+| API | Flask + SQLAlchemy + Flasgger | 3.1.0 |
+| Auth | Flask-JWT-Extended + bcrypt | 4.7 |
 | Base de données | PostgreSQL | 16 |
 | Tâches async | Celery + Redis | 5.4 |
+| Orchestration | Apache Airflow | 2.9.3 |
 | Conteneurisation | Docker Compose | 3.9 |
 | Monitoring | Prometheus + Grafana | 2.53 / 11.0 |
-| Tests | pytest | 8.3 |
+| Chatbot LLM | Groq API (Llama 3.3 70B) | - |
+| Tests | pytest | 8.3.4 |
 | Documentation API | Swagger / OpenAPI | via Flasgger |
 
 ---
@@ -83,12 +103,15 @@ docker compose up --build -d
 
 Tous les services démarrent automatiquement :
 
-| Service | URL |
-|---------|-----|
-| API Flask | http://localhost:5000 |
-| Swagger UI | http://localhost:5000/docs/ |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 (admin/admin123) |
+| Service | URL | Identifiants |
+|---------|-----|--------------|
+| API Flask | http://localhost:5000 | - |
+| Swagger UI | http://localhost:5000/docs/ | - |
+| Chatbot JumiBot | http://localhost:5000/assistant | - |
+| Airflow UI | http://localhost:8080 | admin / admin123 |
+| Prometheus | http://localhost:9090 | - |
+| Grafana | http://localhost:3000 | admin / admin123 |
+| FlareSolverr | http://localhost:8191 | - |
 
 > Voir [INSTALLATION.md](./INSTALLATION.md) pour l'installation complète et le mode développement local.
 
@@ -150,15 +173,18 @@ curl "http://localhost:5000/export?format=json"
 
 ## Ethique du scraping
 
-Ce projet respecte scrupuleusement la charte éthique :
+Ce projet respecte scrupuleusement la charte éthique sur les **3 sources** (Jumia CI, DjokStore CI, CoinAfrique CI) :
 
-- `robots.txt` respecté (`ROBOTSTXT_OBEY = True`)
-- Délai de 2 secondes entre chaque requête + randomisation
-- 1 seule requête concurrente par domaine
-- Maximum 50 items par catégorie, 500 items au total
-- User-Agent identifiable : `ENSEA-Educational-Bot/1.0`
-- Aucune donnée personnelle collectée
-- Site pré-validé auprès de l'enseignant
+- **`robots.txt` respecté** :
+  - DjokStore et CoinAfrique : `ROBOTSTXT_OBEY = True` (Scrapy vérifie automatiquement)
+  - Jumia : vérification **manuelle** (`DISALLOWED_PATTERNS`) car Cloudflare bloque l'accès direct au `robots.txt`
+- **Délais** : 2 secondes entre chaque requête + randomisation (`RANDOMIZE_DOWNLOAD_DELAY = True`)
+- **Concurrence limitée** : 1 seule requête concurrente par domaine
+- **Limite d'items** : max 50 items par catégorie, **500 items au total** (`CLOSESPIDER_ITEMCOUNT = 500`)
+- **User-Agent identifiable** : `ENSEA-Bot/1.0 (+https://ensea.ed.ci; educational project)`
+- **Aucune donnée personnelle** collectée (seulement nom, prix, catégorie, URL)
+- **Sites pré-validés** auprès de l'enseignant
+- **Scraping en heures creuses** : pipeline quotidien à 2h du matin (Africa/Abidjan)
 
 ---
 
@@ -186,28 +212,36 @@ Les tests couvrent :
 
 ```
 webscraping-pipeline-comparateur-prix/
-├── api/                    # API Flask REST
-│   ├── app.py
-│   ├── models.py
-│   ├── schemas.py
-│   └── schema.sql
-├── scraper/                # Spider Scrapy + nettoyage
-│   ├── cleaner.py
+├── api/                    # API Flask REST + chatbot IA
+│   ├── app.py              # Routes REST, auth JWT, Swagger
+│   ├── assistant_routes.py # Endpoints du chatbot JumiBot
+│   ├── models.py           # Schéma ORM SQLAlchemy (8 tables)
+│   ├── schema.sql          # Schéma SQL brut (fallback)
+│   └── templates/          # Frontend HTML (accueil, boutique, ...)
+├── scraper/                # Spiders Scrapy + nettoyage
+│   ├── cleaner.py          # 12 étapes de nettoyage pandas
 │   └── jumia_scraper/
 │       └── spiders/
-│           └── spider_jumia.py
-├── tasks/                  # Celery (worker + beat)
-│   ├── celery_app.py
-│   ├── tasks.py
-│   └── beat_schedule.py
-├── tests/                  # Tests unitaires
+│           ├── spider_jumia.py         # via FlareSolverr
+│           ├── spider_djokstore.py     # direct
+│           └── spider_coinafrique.py   # direct
+├── tasks/                  # Celery
+│   ├── celery_app.py       # Config + Beat (1 tâche temps-réel)
+│   └── tasks.py            # Tâches (scrape, clean, alerts, match)
+├── dags/                   # Airflow
+│   ├── scraping_pipeline.py  # Pipeline quotidien (scrape → clean → drops → alerts → match)
+│   └── weekly_digest.py      # Digest hebdomadaire
+├── airflow/                # Dockerfile Airflow
+├── tests/                  # Tests unitaires (42 tests)
 │   └── test_cleaner.py
 ├── monitoring/             # Prometheus + Grafana
 │   ├── prometheus.yml
 │   └── grafana/provisioning/
-├── docker-compose.yml      # Orchestration 7 services
-├── Dockerfile              # Image Python multi-stage
+├── docker-compose.yml      # Orchestration 12 services
+├── Dockerfile              # Image Python multi-stage (api/worker/beat)
+├── .dockerignore           # Exclusions du contexte de build
 ├── requirements.txt
+├── env.example             # Template de configuration
 ├── INSTALLATION.md
 ├── API_DOCUMENTATION.md
 ├── ARCHITECTURE.md

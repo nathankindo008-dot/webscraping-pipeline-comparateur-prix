@@ -3,38 +3,74 @@
 ## Vue d'ensemble
 
 ```
-                          ┌─────────────────────────────────┐
-                          │        Jumia CI (Web)            │
-                          └──────────────┬──────────────────┘
-                                         │ HTTP (Scrapy)
-                                         ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                        DOCKER COMPOSE                               │
-│                                                                     │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────────┐    │
-│  │   Scrapy      │────▶│   Cleaner    │────▶│   PostgreSQL     │    │
-│  │  (Spider)     │     │  (pandas)    │     │   (Stockage)     │    │
-│  └──────────────┘     └──────────────┘     └────────┬─────────┘    │
-│         ▲                                           │              │
-│         │ lance                                     │ lit          │
-│  ┌──────┴──────────┐                     ┌──────────▼─────────┐    │
-│  │  Celery Worker   │◀── messages ──────│    API Flask        │    │
-│  │  (exécution)     │                    │  (REST + Swagger)  │    │
-│  └──────┬──────────┘                     └──────────┬─────────┘    │
-│         ▲                                           │              │
-│         │ planifie                                   │ /metrics     │
-│  ┌──────┴──────────┐                     ┌──────────▼─────────┐    │
-│  │  Celery Beat     │                    │    Prometheus       │    │
-│  │  (cron)          │                    │  (métriques)        │    │
-│  └─────────────────┘                     └──────────┬─────────┘    │
-│                                                     │              │
-│         ┌──────────────┐                 ┌──────────▼─────────┐    │
-│         │    Redis      │                │    Grafana          │    │
-│         │  (broker)     │                │  (dashboard)        │    │
-│         └──────────────┘                 └────────────────────┘    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+              ┌────────────────────────────────────────────┐
+              │   Sources Web                              │
+              │   • Jumia CI (Cloudflare)                  │
+              │   • DjokStore CI                           │
+              │   • CoinAfrique CI                         │
+              └───────────────────┬────────────────────────┘
+                                  │
+                                  │ HTTP (Scrapy / FlareSolverr)
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           DOCKER COMPOSE (12 services)                  │
+│                                                                         │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐                 │
+│  │ FlareSolverr │──▶│    Scrapy    │──▶│   Cleaner    │                 │
+│  │  (Jumia uniq)│   │ (3 spiders)  │   │   (pandas)   │                 │
+│  └──────────────┘   └──────────────┘   └──────┬───────┘                 │
+│                                               │                         │
+│                                               ▼                         │
+│                                        ┌──────────────┐                 │
+│                                        │  PostgreSQL  │                 │
+│                                        │  (8 tables)  │                 │
+│                                        └──────┬───────┘                 │
+│                                               │                         │
+│   ┌──── ORCHESTRATION ────┐                   │                         │
+│   │                       │                   │ SQLAlchemy              │
+│   │  ┌─────────────────┐  │                   ▼                         │
+│   │  │ Airflow         │  │          ┌────────────────────┐             │
+│   │  │ (DAGs visuels)  │──┤          │    API Flask       │             │
+│   │  │  - pipeline     │  │          │  (REST + JWT +     │             │
+│   │  │  - weekly_digest│  │          │   Swagger + Chat)  │             │
+│   │  └─────────────────┘  │          └────────┬───────────┘             │
+│   │                       │                   │                         │
+│   │  ┌─────────────────┐  │                   │ /metrics                │
+│   │  │ Celery Beat     │  │                   ▼                         │
+│   │  │ (1 tâche / 5min)│──┤          ┌────────────────────┐             │
+│   │  │  - major_drops  │  │          │    Prometheus      │             │
+│   │  └─────────────────┘  │          │    (scrape 30s)    │             │
+│   │            │          │          └────────┬───────────┘             │
+│   └────────────┼──────────┘                   │                         │
+│                ▼                              ▼                         │
+│       ┌──────────────────┐           ┌──────────────────┐               │
+│       │  Celery Worker   │           │     Grafana      │               │
+│       │  (broker Redis)  │           │   (dashboard)    │               │
+│       └──────────────────┘           └──────────────────┘               │
+│                │                                                        │
+│                ▼                                                        │
+│       ┌──────────────────┐                                              │
+│       │      Redis       │                                              │
+│       │ (broker + cache) │                                              │
+│       └──────────────────┘                                              │
+│                                                                         │
+│   Intelligence :                                                        │
+│       ┌──────────────────────────────────────┐                          │
+│       │  JumiBot (chatbot IA)                │                          │
+│       │  Groq API + Llama 3.3 70B            │                          │
+│       │  Appel depuis le navigateur          │                          │
+│       └──────────────────────────────────────┘                          │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Répartition de l'orchestration
+
+| Outil | Responsabilité | Exemples |
+|-------|---------------|----------|
+| **Airflow** | Workflows complexes avec dépendances, UI visuelle | Pipeline quotidien (scrape → clean → drops → alerts → matching), digest hebdomadaire |
+| **Celery Beat** | Cron simple, tâche temps-réel sans dépendances | Détection de chutes majeures (>100%) toutes les 5 min |
+| **Celery Worker** | Exécution effective de toutes les tâches | Reçoit les messages d'Airflow et Beat via Redis |
 
 ---
 
