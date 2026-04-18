@@ -58,6 +58,10 @@
       <div class="fg sm"><label>Min</label><input type="number" id="fMin" placeholder="0"></div>
       <div class="fg sm"><label>Max</label><input type="number" id="fMax" placeholder="∞"></div>
       <button onclick="search(1)" class="btn-jumia btn-sm" style="align-self:flex-end">Filtrer</button>
+      <div class="fg sm" style="min-width:100px"><label>Export</label>
+        <select id="fExportFmt"><option value="excel" selected>Excel</option><option value="csv">CSV</option><option value="json">JSON</option></select>
+      </div>
+      <button onclick="exportData()" class="btn-sm" style="align-self:flex-end;background:#10b981;color:#fff;border:none;padding:.5rem .9rem;border-radius:8px;cursor:pointer;font-weight:600">⬇ Exporter</button>
       <button class="cam-btn" onclick="document.getElementById('camInput').click()"><span>📷</span><span class="txt">Recherche par image</span></button>
       <input type="file" id="camInput" accept="image/*" capture="environment" style="display:none" onchange="handleImageSearch(this)">
     </div>
@@ -76,6 +80,28 @@
 <script>
 const PP=20;let curPage=1;
 function getP(){return{q:document.getElementById('fSearch').value.trim(),source:document.getElementById('fSource').value,category:document.getElementById('fCat').value,sort:document.getElementById('fSort').value,min_price:document.getElementById('fMin').value,max_price:document.getElementById('fMax').value}}
+
+async function exportData(){
+  const tk=localStorage.getItem('jwt');
+  if(!tk){toast('Connectez-vous pour exporter','err');setTimeout(()=>location.href='/login',800);return}
+  const fmt=document.getElementById('fExportFmt').value;
+  const p=getP();
+  const qs=new URLSearchParams();qs.set('format',fmt);
+  if(p.category)qs.set('category',p.category);
+  toast('Preparation du fichier...');
+  try{
+    const r=await fetch(`${API}/export?${qs}`,{headers:{'Authorization':'Bearer '+tk}});
+    if(r.status===401){toast('Session expiree','err');setTimeout(()=>location.href='/login',800);return}
+    if(!r.ok){toast('Erreur export: '+r.status,'err');return}
+    const blob=await r.blob();
+    const ext=fmt==='excel'?'xlsx':fmt;
+    const stamp=new Date().toISOString().slice(0,10);
+    const fname=`jumiaprix_${p.category||'all'}_${stamp}.${ext}`;
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+    toast(`Telecharge : ${fname}`,'ok');
+  }catch(e){console.error(e);toast('Erreur: '+e.message,'err')}
+}
 
 function showTags(p,total){
   let tags=[];
