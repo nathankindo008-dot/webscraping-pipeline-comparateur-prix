@@ -7,7 +7,6 @@
 #   redis      → Broker Celery + cache
 #   api        → API Flask
 #   worker     → Celery worker (exécute les scrapes)
-#   beat       → Celery Beat (planificateur périodique)
 #   prometheus → Collecte des métriques
 #   grafana    → Dashboard de monitoring
 #   airflow-*  → Apache Airflow (orchestrateur visuel de pipeline)
@@ -130,25 +129,6 @@ services:
         condition: service_started
     volumes:
       - ./scraper:/app/scraper
-
-  # ───────────────────────────────────────────
-  # 5. Celery Beat (planificateur)
-  # ───────────────────────────────────────────
-  beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: jumia_beat
-    restart: unless-stopped
-    command: celery -A tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-jumia_user}:${POSTGRES_PASSWORD:-jumia_pass}@postgres:5432/${POSTGRES_DB:-jumia_db}
-      REDIS_URL:    redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   # ───────────────────────────────────────────
   # 6. Prometheus

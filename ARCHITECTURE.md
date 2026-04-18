@@ -33,26 +33,23 @@
 │   │  │ (DAGs visuels)  │──┤          │    API Flask       │             │
 │   │  │  - pipeline     │  │          │  (REST + JWT +     │             │
 │   │  │  - weekly_digest│  │          │   Swagger + Chat)  │             │
-│   │  └─────────────────┘  │          └────────┬───────────┘             │
-│   │                       │                   │                         │
-│   │  ┌─────────────────┐  │                   │ /metrics                │
-│   │  │ Celery Beat     │  │                   ▼                         │
-│   │  │ (1 tâche / 5min)│──┤          ┌────────────────────┐             │
-│   │  │  - major_drops  │  │          │    Prometheus      │             │
-│   │  └─────────────────┘  │          │    (scrape 30s)    │             │
-│   │            │          │          └────────┬───────────┘             │
-│   └────────────┼──────────┘                   │                         │
-│                ▼                              ▼                         │
-│       ┌──────────────────┐           ┌──────────────────┐               │
-│       │  Celery Worker   │           │     Grafana      │               │
-│       │  (broker Redis)  │           │   (dashboard)    │               │
-│       └──────────────────┘           └──────────────────┘               │
-│                │                                                        │
-│                ▼                                                        │
-│       ┌──────────────────┐                                              │
-│       │      Redis       │                                              │
-│       │ (broker + cache) │                                              │
+│   │  └────────┬────────┘  │          └────────┬───────────┘             │
+│   │           │           │                   │                         │
+│   │           │ send_task │                   │ /metrics                │
+│   │           │ via Redis │                   ▼                         │
+│   └───────────┼───────────┘          ┌────────────────────┐             │
+│               ▼                      │    Prometheus      │             │
+│       ┌──────────────────┐           │    (scrape 30s)    │             │
+│       │  Celery Worker   │           └────────┬───────────┘             │
+│       │  (exécutant)     │                    │                         │
+│       └──────────────────┘                    ▼                         │
+│               │                      ┌──────────────────┐               │
+│               │                      │     Grafana      │               │
+│               ▼                      │   (dashboard)    │               │
+│       ┌──────────────────┐           └──────────────────┘               │
+│       │  Postgres + Redis│                                              │
 │       └──────────────────┘                                              │
+│                │                                                        │
 │                                                                         │
 │   Intelligence :                                                        │
 │       ┌──────────────────────────────────────┐                          │
@@ -68,9 +65,9 @@
 
 | Outil | Responsabilité | Exemples |
 |-------|---------------|----------|
-| **Airflow** | Workflows complexes avec dépendances, UI visuelle | Pipeline quotidien (scrape → clean → drops → alerts → matching), digest hebdomadaire |
-| **Celery Beat** | Cron simple, tâche temps-réel sans dépendances | Détection de chutes majeures (>100%) toutes les 5 min |
-| **Celery Worker** | Exécution effective de toutes les tâches | Reçoit les messages d'Airflow et Beat via Redis |
+| **Airflow** | Orchestrateur unique (workflows, scheduling, UI visuelle) | Pipeline quotidien (scrape → clean → drops → alerts → matching), digest hebdomadaire |
+| **Celery Worker** | Exécution effective de toutes les tâches | Reçoit les messages d'Airflow via Redis et lance Scrapy / clean / insert |
+| **Redis** | Broker de messages entre Airflow et le worker | Queue Celery + backend de résultats |
 
 ---
 
@@ -119,18 +116,21 @@ Jumia CI → spider_jumia.py → raw_data.json → cleaner.py → clean_data.jso
 
 | Fichier | Rôle |
 |---------|------|
-| `celery_app.py` | Configuration Celery (broker Redis, sérialisation, beat_schedule) |
-| `tasks.py` | Tâches Celery : scraping, nettoyage, insertion, détection baisses |
-| `beat_schedule.py` | Documentation du planificateur |
+| `celery_app.py` | Configuration Celery (broker Redis, sérialisation, retries) |
+| `tasks.py` | Tâches Celery : scraping, nettoyage, insertion, détection baisses, alertes, matching, digest |
 
 **Tâches Celery :**
 
 | Tâche | Déclencheur | Description |
 |-------|-------------|-------------|
-| `scrape_jumia` | Manuel / Pipeline | Lance le spider Scrapy |
-| `clean_and_insert` | Après scraping | Nettoie et insère en base |
-| `full_pipeline` | Beat (2h/jour) | Pipeline complet scrape → clean → insert |
-| `check_price_drops` | Beat (6h/jour) | Détecte les baisses de prix > 10% |
+| `scrape_jumia` | Airflow DAG (quotidien 2h) | Lance le spider Scrapy Jumia via FlareSolverr |
+| `scrape_djokstore` | Airflow DAG (quotidien 2h) | Lance le spider DjokStore + clean + insert |
+| `scrape_coinafrique` | Airflow DAG (quotidien 2h) | Lance le spider CoinAfrique + clean + insert |
+| `clean_and_insert` | Airflow DAG (après scrape Jumia) | Nettoie et insère les données Jumia |
+| `check_price_drops` | Airflow DAG (quotidien) | Détecte les baisses de prix > 10 % |
+| `check_price_alerts` | Airflow DAG (quotidien) | Vérifie les alertes utilisateurs et envoie les emails |
+| `match_cross_source` | Airflow DAG (quotidien) | Fuzzy-matching des produits entre sources |
+| `send_weekly_digest` | Airflow DAG `weekly_digest` (lundi 8 h) | Envoie le digest hebdomadaire |
 
 ---
 
@@ -184,18 +184,20 @@ Vues SQL :
 ## Infrastructure Docker
 
 ```yaml
-Services (7) :
-  postgres   → PostgreSQL 16 Alpine      (port 5433)
-  redis      → Redis 7 Alpine            (port 6379)
-  api        → Flask API                  (port 5000)
-  worker     → Celery Worker
-  beat       → Celery Beat
-  prometheus → Prometheus                 (port 9090)
-  grafana    → Grafana                    (port 3000)
+Services :
+  postgres            → PostgreSQL 16 Alpine      (port 5433)
+  redis               → Redis 7 Alpine            (port 6379)
+  api                 → Flask API                  (port 5000)
+  worker              → Celery Worker              (exécutant)
+  flaresolverr        → Bypass Cloudflare Jumia   (port 8191)
+  prometheus          → Prometheus                 (port 9090)
+  grafana             → Grafana                    (port 3000)
+  airflow-init        → Migration DB + user admin
+  airflow-webserver   → UI Airflow                 (port 8080)
+  airflow-scheduler   → Scheduler Airflow
 
-Volumes (6) :
-  postgres_data, redis_data, scraper_data,
-  beat_data, prometheus_data, grafana_data
+Volumes :
+  postgres_data, redis_data, prometheus_data, grafana_data
 ```
 
 ---
@@ -220,9 +222,8 @@ webscraping-pipeline-comparateur-prix/
 │       └── spiders/
 │           └── spider_jumia.py
 ├── tasks/
-│   ├── celery_app.py       # Config Celery
-│   ├── tasks.py            # Tâches Celery
-│   └── beat_schedule.py    # Planificateur
+│   ├── celery_app.py       # Config Celery (worker exécutant)
+│   └── tasks.py            # Tâches Celery
 ├── tests/
 │   └── test_cleaner.py     # Tests unitaires
 ├── monitoring/

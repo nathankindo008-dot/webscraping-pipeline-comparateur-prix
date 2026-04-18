@@ -1,6 +1,6 @@
 # =============================================================
 # Dockerfile — Comparateur de Prix Jumia CI
-# Utilisé par : api, worker, beat
+# Utilisé par : api, worker
 # =============================================================
 
 FROM python:3.12-slim AS base
@@ -52,5 +52,5 @@ USER appuser
 EXPOSE 5000
 
 # Commande par défaut → API Flask
-# (override dans docker-compose pour worker/beat)
+# (override dans docker-compose pour le worker Celery)
 CMD ["python", "api/app.py"]

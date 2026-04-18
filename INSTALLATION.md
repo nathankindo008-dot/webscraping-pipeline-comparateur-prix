@@ -137,15 +137,15 @@ python app.py
 
 L'API est accessible sur http://localhost:5000
 
-### 8. Lancer Celery (optionnel)
+### 8. Lancer le worker Celery (optionnel)
 
 ```bash
-# Worker (dans un terminal séparé)
+# Worker qui exécute les tâches publiées par Airflow via Redis
 celery -A tasks.celery_app worker --loglevel=info
-
-# Beat — planificateur (dans un autre terminal)
-celery -A tasks.celery_app beat --loglevel=info
 ```
+
+L'orchestration (scheduling) est gérée par Airflow (conteneurs `airflow-*`).
+Pas de Celery Beat : Airflow est l'unique orchestrateur du projet.
 
 ---
 

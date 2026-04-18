@@ -1,6 +1,6 @@
 # =============================================================
 # Dockerfile Airflow — Comparateur de Prix Jumia CI
-# Orchestrateur visuel de pipeline (complement a Celery Beat)
+# Orchestrateur unique du pipeline (publie vers Celery worker via Redis)
 # =============================================================
 
 FROM apache/airflow:2.9.3-python3.12

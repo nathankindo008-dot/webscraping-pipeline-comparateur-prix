@@ -38,9 +38,9 @@ Ce projet implémente un **pipeline de production complet** pour la collecte et 
 2. **Nettoyage intelligent** (pandas) avec détection des prix aberrants par catégorie
 3. **Stockage** PostgreSQL avec **historique des prix** (`price_history`) et **matching cross-source** (produits identiques entre sources)
 4. **API REST** complète avec pagination, recherche, filtres, comparaison, auth JWT
-5. **Orchestration hybride** :
-   - **Airflow** orchestre les workflows complexes (pipeline quotidien, digest hebdo)
-   - **Celery Beat** gère la veille temps-réel (chutes majeures toutes les 5 min)
+5. **Orchestration** :
+   - **Airflow** est l'orchestrateur unique des workflows (pipeline quotidien, digest hebdo)
+   - **Celery worker** exécute les tâches publiées par Airflow via Redis
 6. **Monitoring** : Prometheus + Grafana (dashboard préconfiguré)
 7. **Chatbot IA** (JumiBot) basé sur Llama 3.3 70B via Groq
 8. **Alertes email** de baisse de prix + digest hebdomadaire
@@ -57,7 +57,7 @@ Ce projet implémente un **pipeline de production complet** pour la collecte et 
                                                             │
          ┌───────────────────────────────────────┐          │
          │       ORCHESTRATION                   │          ▼
-         │  Airflow (pipelines)  +  Beat (5min)  │   ┌──────────────┐
+         │       Airflow (DAGs + scheduler)      │   ┌──────────────┐
          └──────────────┬────────────────────────┘   │  API Flask   │
                         │                            │ (REST+Swagger│
                         ▼                            │   + Chatbot) │
@@ -225,8 +225,8 @@ webscraping-pipeline-comparateur-prix/
 │           ├── spider_jumia.py         # via FlareSolverr
 │           ├── spider_djokstore.py     # direct
 │           └── spider_coinafrique.py   # direct
-├── tasks/                  # Celery
-│   ├── celery_app.py       # Config + Beat (1 tâche temps-réel)
+├── tasks/                  # Celery (worker exécutant)
+│   ├── celery_app.py       # Config du worker
 │   └── tasks.py            # Tâches (scrape, clean, alerts, match)
 ├── dags/                   # Airflow
 │   ├── scraping_pipeline.py  # Pipeline quotidien (scrape → clean → drops → alerts → match)
@@ -237,8 +237,8 @@ webscraping-pipeline-comparateur-prix/
 ├── monitoring/             # Prometheus + Grafana
 │   ├── prometheus.yml
 │   └── grafana/provisioning/
-├── docker-compose.yml      # Orchestration 12 services
-├── Dockerfile              # Image Python multi-stage (api/worker/beat)
+├── docker-compose.yml      # Orchestration des services
+├── Dockerfile              # Image Python multi-stage (api/worker)
 ├── .dockerignore           # Exclusions du contexte de build
 ├── requirements.txt
 ├── env.example             # Template de configuration

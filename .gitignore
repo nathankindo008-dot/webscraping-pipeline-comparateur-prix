@@ -23,3 +23,7 @@ env/
 # IDEs
 .vscode/
 .idea/
+
+# Exports utilisateur (générés à la demande via /export)
+exports/
+*.xlsx
